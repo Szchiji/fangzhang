@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head><title>定时任务</title></head>
+<body>
+<h1>定时任务列表</h1>
+<a href="/task_edit">+ 新增任务</a>
+<table border="1" style="width:100%; margin-top:20px;">
+    <tr><th>ID</th><th>内容</th><th>时间</th><th>状态</th><th>操作</th></tr>
+    {% for task in tasks %}
+    <tr>
+        <td>{{ task.id }}</td>
+        <td>{{ task.content }}</td>
+        <td>{{ task.time }}</td>
+        <td>{% if task.enabled %}启用{% else %}禁用{% endif %}</td>
+        <td>
+            <a href="/task_edit/{{ task.id }}">编辑</a> |
+            <a href="/task_delete/{{ task.id }}">删除</a>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+<a href="/dashboard">返回</a>
+</body>
+</html>
