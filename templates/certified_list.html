@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head><title>认证用户管理</title></head>
+<body>
+<h1>认证用户列表</h1>
+<a href="/certified_edit">+ 添加认证用户</a>
+<table border="1" style="width:100%; margin-top:20px;">
+    <tr><th>用户</th><th>头衔</th><th>今日打卡</th><th>连签</th><th>操作</th></tr>
+    {% for user in users %}
+    <tr>
+        <td>{{ user.user_id }}</td>
+        <td>{{ user.title }}</td>
+        <td>{% if user.last_checkin == today %}✅ 已打卡{% else %}❌ 未打卡{% endif %}</td>
+        <td>{{ user.checkin_streak }} 天</td>
+        <td>
+            <a href="/certified_edit/{{ user.id }}">编辑</a> |
+            <a href="/certified_delete/{{ user.id }}" onclick="return confirm('确定删除？')">删除</a>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+<a href="/dashboard">返回</a>
+</body>
+</html>
