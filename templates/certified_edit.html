@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head><title>{% if user %}编辑{% else %}添加{% endif %}认证用户</title></head>
+<body>
+<h1>{% if user %}编辑{% else %}添加{% endif %}认证用户</h1>
+<form method="post">
+    <label>用户Telegram ID</label>
+    <input type="number" name="user_id" value="{{ user.user_id if user else '' }}" required><br><br>
+    
+    <label>认证头衔</label>
+    <input type="text" name="title" value="{{ user.title if user else '认证用户' }}" required><br><br>
+    
+    <button type="submit">保存</button>
+</form>
+<a href="/certified_list">返回列表</a>
+</body>
+</html>
