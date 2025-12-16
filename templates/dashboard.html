@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>仪表盘 - 私人方丈机器人</title>
+    <style>
+        body {font-family: Arial; margin:0; background:#f5f5f5;}
+        .sidebar {width: 220px; background:#2c3e50; color:white; position:fixed; height:100%; padding-top:20px;}
+        .sidebar a {display:block; padding:15px; color:white; text-decoration:none;}
+        .sidebar a:hover {background:#34495e;}
+        .main {margin-left:240px; padding:30px;}
+        .card {background:white; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1); margin-bottom:20px;}
+    </style>
+</head>
+<body>
+<div class="sidebar">
+    <h2 style="text-align:center; padding:20px;">方丈机器人</h2>
+    <a href="/dashboard">🏠 仪表盘</a>
+    <a href="/group_config">⚙️ 群设置</a>
+    <a href="/certified_list">👥 认证用户管理</a>
+    <a href="/task_list">⏰ 定时任务</a>
+    <a href="/login?logout=1">🚪 退出登录</a>
+</div>
+<div class="main">
+    <h1>欢迎回来，管理员！</h1>
+    <div class="card">
+        <h2>快速操作</h2>
+        <p>所有配置实时生效，机器人自动执行</p>
+        <p>当前机器人状态：运行中</p>
+    </div>
+</div>
+</body>
+</html>
