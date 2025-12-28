@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>管理后台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
         .sidebar { width: 250px; height: 100vh; position: fixed; background: #212529; color: white; padding: 20px; }
         .main { margin-left: 250px; padding: 40px; background: #f8f9fa; min-height: 100vh; }
@@ -14,36 +13,30 @@
 </head>
 <body>
     <div class="sidebar">
-        <h4 class="mb-4">机器人管理</h4>
+        <h4 class="mb-4 text-center">控制台</h4>
         <nav class="nav flex-column">
             <a class="nav-link active" onclick="showTab('users')">老师列表</a>
-            <a class="nav-link" onclick="showTab('config')">机器人设置</a>
+            <a class="nav-link" onclick="showTab('config')">全局设置</a>
             <hr>
-            <a href="/portal?sid={{sid}}" class="nav-link text-info">返回群组选择</a>
+            <a href="/portal?sid={{sid}}" class="nav-link text-info">返回群组</a>
         </nav>
     </div>
 
     <div class="main">
         <div id="tab-users">
             <div class="d-flex justify-content-between mb-4">
-                <h3>{{ group.group_name }}</h3>
+                <h3>{{ group.group_name }} 管理</h3>
                 <button class="btn btn-primary" onclick="openAddModal()">+ 添加老师</button>
             </div>
             
-            <form class="input-group mb-4" method="get" action="/manage">
-                <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                <input type="text" name="q" class="form-control" placeholder="搜索..." value="{{q}}">
-                <button class="btn btn-dark" type="submit">搜索</button>
-            </form>
-
             <div class="card p-3 shadow-sm border-0">
                 <table class="table align-middle">
-                    <thead><tr><th>权重</th><th>基本信息</th><th>自定义资料</th><th>状态</th><th class="text-end">操作</th></tr></thead>
+                    <thead><tr><th>权重</th><th>基本信息</th><th>资料预览</th><th>授权状态</th><th class="text-end">操作</th></tr></thead>
                     <tbody>
                         {% for u in users %}
                         <tr>
                             <td>{{ u.sort_order }}</td>
-                            <td><b>{{ u.name }}</b><br><small class="text-muted">{{ u.user_id }}</small></td>
+                            <td><b>{{ u.name }}</b><br><small>{{ u.user_id }}</small></td>
                             <td>
                                 {% set data = u.data_json|json_loads %}
                                 {% for k, v in data.items() %}
@@ -59,7 +52,7 @@
                                 <button class="btn btn-sm btn-outline-primary" onclick='editUser("{{u.user_id}}","{{u.name}}","{{u.sort_order}}",{{ u.data_json|safe }})'>编辑</button>
                                 <form action="/api/delete_user" method="post" class="d-inline">
                                     <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="user_id" value="{{u.user_id}}">
-                                    <button class="btn btn-sm btn-outline-danger ms-1" onclick="return confirm('确定删除？')">删除</button>
+                                    <button class="btn btn-sm btn-outline-danger ms-1" onclick="return confirm('确定移除？')">删除</button>
                                 </form>
                             </td>
                         </tr>
@@ -70,49 +63,54 @@
         </div>
 
         <div id="tab-config" style="display:none">
-            <h3 class="mb-4">配置中心</h3>
+            <h3 class="mb-4">群组配置</h3>
             <div class="card p-4 border-0 shadow-sm">
                 <form action="/api/save_config" method="post">
                     <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
                     <div class="mb-3">
-                        <label class="form-label fw-bold">1. 自定义字段 (用逗号隔开)</label>
-                        <input type="text" name="custom_fields" class="form-control" value="{{ group.custom_fields }}">
+                        <label class="form-label fw-bold text-danger">1. 自定义字段 (填入后保存，添加老师时才会显示输入框)</label>
+                        <input type="text" name="custom_fields" class="form-control" value="{{ group.custom_fields }}" placeholder="例如: 地区,价位,胸围">
+                        <small class="text-muted">注意：用英文逗号隔开，不要有空格</small>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">2. 展示模板</label>
-                        <textarea name="list_template" class="form-control" rows="4">{{ group.list_template }}</textarea>
-                        <div class="form-text mt-2 text-primary">
-                            可用占位符：{onlineEmoji}, {name}, 
-                            {% for f in group.custom_fields.split(',') %} {{"{"}}{{f}}{{"}"}}, {% endfor %}
+                        <label class="form-label fw-bold">2. 展示模板占位符</label>
+                        <textarea name="list_template" class="form-control" rows="3">{{ group.list_template }}</textarea>
+                        <div class="bg-light p-2 mt-2">
+                            可用: {onlineEmoji} {name} 
+                            {% for f in group.custom_fields.split(',') %}{% if f %}{{"{"}}{{f}}{{"}"}} {% endif %}{% endfor %}
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">3. 点赞表情</label>
+                        <label class="form-label">3. 点赞表情</label>
                         <input type="text" name="like_emoji" class="form-control w-25" value="{{ group.like_emoji }}">
                     </div>
-                    <button class="btn btn-success">保存配置</button>
+                    <button class="btn btn-success px-5">保存全局设置</button>
                 </form>
             </div>
         </div>
     </div>
 
     <div class="modal fade" id="userModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog">
             <form class="modal-content" action="/api/save_user" method="post" id="userForm">
                 <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                <div class="modal-header"><h5>老师资料</h5></div>
+                <div class="modal-header"><h5>老师资料配置</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body row g-3">
-                    <div class="col-12"><label>用户 UID</label><input type="number" name="user_id" id="f_id" class="form-control" required></div>
-                    <div class="col-12"><label>名字</label><input type="text" name="name" id="f_name" class="form-control" required></div>
+                    <div class="col-12"><label>用户 UID</label><input type="text" name="user_id" id="f_id" class="form-control" required></div>
+                    <div class="col-12"><label>姓名</label><input type="text" name="name" id="f_name" class="form-control" required></div>
+                    
                     <div id="dynamic-area" class="row g-3 m-0 p-0">
                         {% for f in group.custom_fields.split(',') %}
+                        {% if f %}
                         <div class="col-md-6"><label>{{f}}</label><input type="text" name="{{f}}" class="form-control dyn-input" data-key="{{f}}"></div>
+                        {% endif %}
                         {% endfor %}
                     </div>
-                    <div class="col-md-6"><label>权重</label><input type="number" name="sort" id="f_sort" class="form-control" value="0"></div>
-                    <div class="col-md-6"><label>天数(0永久)</label><input type="number" name="days" class="form-control" value="0"></div>
+
+                    <div class="col-6"><label>排序权重</label><input type="number" name="sort" id="f_sort" class="form-control" value="0"></div>
+                    <div class="col-6"><label>有效期(天, 0永久)</label><input type="number" name="days" class="form-control" value="0"></div>
                 </div>
-                <div class="modal-footer"><button class="btn btn-primary w-100">保存</button></div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary w-100">确认保存</button></div>
             </form>
         </div>
     </div>
