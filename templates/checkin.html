@@ -1,51 +1,67 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="row">
-    <div class="col-md-3">{% include 'sidebar.html' %}</div>
-    <div class="col-md-9">
-        <div class="card p-4">
-            <h5 class="fw-bold mb-4">打卡配置 - {{ g[1] }}</h5>
-            <form action="/update_settings" method="POST">
-                <input type="hidden" name="sid" value="{{ sid }}">
-                <input type="hidden" name="gid" value="{{ gid }}">
-                <div class="mb-3">
-                    <label class="form-label">打卡指令</label>
-                    <input type="text" name="checkin_cmd" class="form-control" value="{{ g[3] }}">
-                </div>
-                <div class="list-group list-group-flush mb-4">
-                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                        <span>打卡成功消息</span>
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="openEditor('msg_checkin_success')">点击修改</button>
+<div class="card p-4">
+    <div class="d-flex align-items-center mb-4">
+        <div class="bg-success-soft text-success p-2 rounded-3 me-3" style="background: rgba(46,204,113,0.1);">
+            <i class="bi bi-calendar-check fs-4"></i>
+        </div>
+        <h5 class="fw-bold m-0">打卡系统逻辑配置</h5>
+    </div>
+
+    <form id="checkinForm">
+        <input type="hidden" name="sid" value="{{sid}}">
+        <input type="hidden" name="gid" value="{{gid}}">
+        
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="p-3 border rounded-3 h-100">
+                    <label class="small fw-bold text-success mb-2">🟢 在线打卡配置</label>
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-1">触发指令</small>
+                        <input type="text" class="form-control" name="check_cmd" value="{{ g[3] or '打卡' }}" onchange="updateValue('check_cmd', this.value)">
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-1">显示表情</small>
+                        <input type="text" class="form-control" name="on_emoji" value="{{ g[4] or '✅' }}" onchange="updateValue('on_emoji', this.value)">
+                    </div>
+                    <div>
+                        <small class="text-muted d-block mb-1">自定义回复话术</small>
+                        <textarea class="form-control" name="msg_on" rows="2" onchange="updateValue('msg_on', this.value)" placeholder="例如：打卡成功，祝您愉快！">{{ g[7] or '' }}</textarea>
                     </div>
                 </div>
-                <input type="hidden" name="msg_checkin_success" id="src_msg_checkin_success" value="{{ g[6] }}">
-                <button type="submit" class="btn btn-primary w-100">保存设置</button>
-            </form>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="richModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-body">
-                <div id="editor" style="height: 300px;"></div>
             </div>
-            <div class="modal-footer"><button type="button" class="btn btn-primary" onclick="save()">确定</button></div>
+
+            <div class="col-md-6">
+                <div class="p-3 border rounded-3 h-100">
+                    <label class="small fw-bold text-danger mb-2">🔴 下班休息配置</label>
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-1">触发指令</small>
+                        <input type="text" class="form-control" name="off_cmd" value="{{ g[6] or '休息' }}" onchange="updateValue('off_cmd', this.value)">
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-1">显示表情</small>
+                        <input type="text" class="form-control" name="off_emoji" value="{{ g[5] or '❌' }}" onchange="updateValue('off_emoji', this.value)">
+                    </div>
+                    <div>
+                        <small class="text-muted d-block mb-1">自定义回复话术</small>
+                        <textarea class="form-control" name="msg_off" rows="2" onchange="updateValue('msg_off', this.value)" placeholder="例如：辛苦了，好好休息。">{{ g[8] or '' }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 text-end">
+                <button type="button" onclick="showToast('✅ 打卡逻辑已同步')" class="btn btn-primary px-5 rounded-pill shadow">保存设置</button>
+            </div>
         </div>
-    </div>
+    </form>
 </div>
 
 <script>
-    var quill = new Quill('#editor', { theme: 'snow' });
-    var cur = '';
-    function openEditor(id) {
-        cur = id; quill.root.innerHTML = document.getElementById('src_'+id).value;
-        new bootstrap.Modal(document.getElementById('richModal')).show();
-    }
-    function save() {
-        document.getElementById('src_'+cur).value = quill.root.innerHTML;
-        bootstrap.Modal.getInstance(document.getElementById('richModal')).hide();
+    async function updateValue(field, value) {
+        const fd = new FormData();
+        fd.append('sid', '{{sid}}'); fd.append('gid', '{{gid}}');
+        fd.append('field', field); fd.append('value', value);
+        await fetch('/api/save', { method: 'POST', body: fd });
     }
 </script>
 {% endblock %}
