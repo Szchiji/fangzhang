@@ -2,75 +2,71 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>BotHub 专业管理后台</title>
+    <title>管理后台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        body { background: #f0f2f5; display: flex; min-height: 100vh; }
-        .sidebar { width: 230px; background: white; border-right: 1px solid #ddd; position: fixed; height: 100%; }
-        .main { margin-left: 230px; flex: 1; padding: 25px; }
-        .nav-link { padding: 12px 20px; color: #444; border-left: 4px solid transparent; cursor: pointer; }
+        body { background: #f8f9fa; display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: white; border-right: 1px solid #dee2e6; position: fixed; height: 100%; }
+        .main { margin-left: 220px; flex: 1; padding: 25px; }
+        .nav-link { color: #333; cursor: pointer; border-left: 4px solid transparent; }
         .nav-link.active { background: #eef4ff; color: #0d6efd; border-left-color: #0d6efd; font-weight: bold; }
-        .card { border: none; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        .var-btn { margin: 0 5px 5px 0; font-size: 12px; }
-        .ql-toolbar.ql-snow { border-radius: 8px 8px 0 0; background: #f8f9fa; }
-        .ql-container.ql-snow { border-radius: 0 0 8px 8px; background: white; height: 200px; }
+        .ql-toolbar { border-radius: 8px 8px 0 0; }
+        .ql-container { border-radius: 0 0 8px 8px; height: 150px; background: white; }
     </style>
 </head>
 <body>
 
-<div class="sidebar d-flex flex-column pt-4">
-    <div class="px-4 mb-4 text-primary fw-bold fs-5">控制中心</div>
+<div class="sidebar pt-4 d-flex flex-column">
+    <div class="px-4 mb-4 fw-bold text-primary fs-5 border-bottom pb-3">TG Bot Admin</div>
     <div class="nav flex-column">
-        <div class="nav-link active" onclick="showSec('sec-base', this)"><i class="bi bi-gear me-2"></i> 基础配置</div>
-        <div class="nav-link" onclick="showSec('sec-users', this)"><i class="bi bi-people me-2"></i> 老师管理</div>
-        <div class="nav-link" onclick="showSec('sec-timers', this)"><i class="bi bi-clock-history me-2"></i> 定时任务</div>
+        <div class="nav-link active" onclick="showSec('sec-base', this)"><i class="bi bi-gear me-2"></i> 基础设置</div>
+        <div class="nav-link" onclick="showSec('sec-users', this)"><i class="bi bi-person-badge me-2"></i> 老师库管理</div>
+        <div class="nav-link" onclick="showSec('sec-timers', this)"><i class="bi bi-clock me-2"></i> 定时任务</div>
     </div>
 </div>
 
 <div class="main">
     <section id="sec-base">
-        <h4 class="fw-bold mb-4">⚙️ 样式与占位符设置</h4>
+        <h5 class="fw-bold mb-4">样式与变量配置</h5>
         <form action="/api/save" method="post" onsubmit="syncAll()">
             <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-            <div class="card p-4 mb-4">
-                <div class="row mb-3">
-                    <div class="col-md-8"><label class="form-label fw-bold small">变量字段 (逗号隔开)</label><input type="text" name="fields" class="form-control" value="{{group.custom_fields}}"></div>
-                    <div class="col-md-4"><label class="form-label fw-bold small">打卡回复图标</label><input type="text" name="emoji" class="form-control" value="{{group.like_emoji}}"></div>
+            <div class="card p-4 shadow-sm border-0 mb-4">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-8"><label class="small fw-bold">占位符字段 (英文逗号隔开)</label><input type="text" name="fields" class="form-control" value="{{group.custom_fields}}"></div>
+                    <div class="col-md-4"><label class="small fw-bold">点赞图标</label><input type="text" name="emoji" class="form-control" value="{{group.like_emoji}}"></div>
                 </div>
-                <div class="p-3 bg-light rounded border mb-3">
-                    <label class="d-block small fw-bold text-muted mb-2">点击变量插入编辑器：</label>
-                    <div id="var-container">
-                        <button type="button" class="btn btn-dark btn-sm var-btn" onclick="insertV('{姓名Value}')">{姓名}</button>
-                        {% for f in group.custom_fields.split(',') %}<button type="button" class="btn btn-outline-primary btn-sm var-btn" onclick="insertV('{{'{'}}{{f}}Value{{'}'}}')">{{f}}</button>{% endfor %}
-                    </div>
+                <div class="mb-3 p-3 bg-light rounded border">
+                    <label class="d-block small fw-bold text-muted mb-2">插入变量：</label>
+                    <button type="button" class="btn btn-sm btn-dark me-1 mb-1" onclick="insertV('{姓名Value}')">{姓名}</button>
+                    {% for f in group.custom_fields.split(',') %}<button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="insertV('{{'{'}}{{f}}Value{{'}'}}')">{{f}}</button>{% endfor %}
                 </div>
                 <div class="row">
-                    <div class="col-md-6 mb-3"><label class="fw-bold small mb-2">在线名单模板</label><div id="ed-list">{{group.list_template|safe}}</div><input type="hidden" name="list_t" id="in-list"></div>
-                    <div class="col-md-6 mb-3"><label class="fw-bold small mb-2">打卡回复模板</label><div id="ed-check">{{group.checkin_template|safe}}</div><input type="hidden" name="check_t" id="in-check"></div>
+                    <div class="col-md-6 mb-3"><label class="small fw-bold mb-2">在线名单样式</label><div id="ed-list">{{group.list_template|safe}}</div><input type="hidden" name="list_t" id="in-list"></div>
+                    <div class="col-md-6 mb-3"><label class="small fw-bold mb-2">打卡回复样式</label><div id="ed-check">{{group.checkin_template|safe}}</div><input type="hidden" name="check_t" id="in-check"></div>
                 </div>
-                <button type="submit" class="btn btn-primary mt-2 px-5">保存当前配置</button>
+                <button type="submit" class="btn btn-primary px-5">💾 保存所有配置</button>
             </div>
         </form>
     </section>
 
     <section id="sec-users" style="display:none;">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4 class="fw-bold">👤 老师库管理</h4>
+        <div class="d-flex justify-content-between mb-4">
+            <h5 class="fw-bold">老师库管理</h5>
             <div class="d-flex gap-2">
-                <input type="text" id="userSearch" class="form-control form-control-sm" style="width:200px;" placeholder="🔍 搜索姓名或UID...">
+                <input type="text" id="uSearch" class="form-control form-control-sm" placeholder="搜索..." style="width:200px;">
                 <button class="btn btn-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#userModal">+ 新增老师</button>
             </div>
         </div>
-        <div class="card overflow-hidden">
-            <table class="table table-hover align-middle mb-0" id="userTable">
+        <div class="card border-0 shadow-sm overflow-hidden">
+            <table class="table table-hover align-middle mb-0" id="uTable">
                 <thead class="table-light"><tr><th>UID</th><th>姓名</th><th>详情数据</th><th>操作</th></tr></thead>
                 <tbody>
                     {% for u in users %}
                     <tr>
                         <td><code>{{u.user_id}}</code></td><td>{{u.name}}</td><td class="small text-muted">{{u.data_json}}</td>
-                        <td><form action="/api/user" method="post" class="d-inline"><input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="user_id" value="{{u.user_id}}"><input type="hidden" name="action" value="del"><button type="submit" class="btn btn-link btn-sm text-danger text-decoration-none">删除</button></form></td>
+                        <td><form action="/api/user" method="post"><input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="user_id" value="{{u.user_id}}"><input type="hidden" name="action" value="del"><button type="submit" class="btn btn-link btn-sm text-danger p-0">删除</button></form></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -79,19 +75,21 @@
     </section>
 
     <section id="sec-timers" style="display:none;">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4 class="fw-bold">⏰ 定时任务记录</h4>
-            <button class="btn btn-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#timerModal">+ 新增任务</button>
+        <div class="d-flex justify-content-between mb-4">
+            <h5 class="fw-bold">定时任务记录</h5>
+            <button class="btn btn-primary btn-sm px-3" onclick="openTimerModal()">+ 新增任务</button>
         </div>
-        <div class="card p-3">
-            <table class="table table-hover align-middle mb-0" style="font-size: 14px;">
-                <thead class="table-light"><tr><th>备注</th><th>上次发送</th><th>频率</th><th>置顶</th><th>操作</th></tr></thead>
+        <div class="card border-0 shadow-sm p-3">
+            <table class="table table-hover align-middle mb-0 small">
+                <thead class="table-light"><tr><th>备注</th><th>上次发送</th><th>频率</th><th>操作</th></tr></thead>
                 <tbody>
                     {% for t in timers %}
                     <tr>
-                        <td>{{t.remark}}</td><td>{{t.last_run or '等待执行'}}</td><td>每 {{t.interval_hours}} 小时</td>
-                        <td>{% if t.is_pin %}✅{% else %}-{% endif %}</td>
-                        <td><form action="/api/timer" method="post"><input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="tid" value="{{t.id}}"><input type="hidden" name="action" value="del"><button type="submit" class="btn btn-link btn-sm text-danger text-decoration-none">删除</button></form></td>
+                        <td>{{t.remark}}</td><td>{{t.last_run or '-'}}</td><td>{{t.interval_hours}}h</td>
+                        <td>
+                            <button class="btn btn-link btn-sm p-0 me-2" onclick='editTimer({{ t | tojson }})'>编辑</button>
+                            <form action="/api/timer" method="post" class="d-inline"><input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="tid" value="{{t.id}}"><input type="hidden" name="action" value="del"><button type="submit" class="btn btn-link btn-sm text-danger p-0">删除</button></form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -102,15 +100,21 @@
 
 <div class="modal fade" id="userModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <form action="/api/user" method="post" class="modal-content border-0 shadow">
+        <form action="/api/user" method="post" class="modal-content border-0 shadow" id="form-user">
             <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="action" value="add">
-            <div class="modal-header"><h6 class="fw-bold m-0">添加老师认证</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body p-4">
-                <div class="mb-3"><label class="small fw-bold">用户 UID</label><input type="text" name="user_id" class="form-control" required></div>
-                <div class="mb-3"><label class="small fw-bold">老师姓名</label><input type="text" name="name" class="form-control" required></div>
-                <div class="mb-3"><label class="small fw-bold">数据 (JSON格式)</label><textarea name="data" class="form-control" rows="3">{"地区":"南山", "价格":"1000"}</textarea></div>
+            <input type="hidden" name="data" id="in-user-data">
+            <div class="modal-header border-0 pb-0"><h6 class="fw-bold">添加认证老师</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3"><label class="small fw-bold">UID</label><input type="text" name="user_id" class="form-control form-control-sm" required></div>
+                <div class="mb-3"><label class="small fw-bold">姓名</label><input type="text" name="name" class="form-control form-control-sm" required></div>
+                <hr>
+                <div id="dynamic-fields">
+                    {% for f in group.custom_fields.split(',') %}
+                    <div class="mb-2"><label class="small fw-bold text-primary">{{f}}</label><input type="text" class="form-control form-control-sm dyn-input" data-key="{{f}}"></div>
+                    {% endfor %}
+                </div>
             </div>
-            <div class="modal-footer border-0"><button type="submit" class="btn btn-primary px-4">保存信息</button></div>
+            <div class="modal-footer border-0"><button type="submit" class="btn btn-primary btn-sm px-4" onclick="packUserData()">保存</button></div>
         </form>
     </div>
 </div>
@@ -118,25 +122,27 @@
 <div class="modal fade" id="timerModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <form action="/api/timer" method="post" class="modal-content border-0 shadow">
-            <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="action" value="add">
-            <div class="modal-header"><h6 class="fw-bold m-0">创建定时发送任务</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body p-4">
-                <div class="row mb-3">
-                    <div class="col-md-4"><label class="small fw-bold">媒体类型</label><select name="m_type" class="form-select form-select-sm"><option>文本内容</option><option>图片</option><option>视频</option></select></div>
-                    <div class="col-md-8"><label class="small fw-bold">图片/视频链接</label><input type="text" name="m_url" class="form-control form-control-sm" placeholder="URL 地址"></div>
+            <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
+            <input type="hidden" name="action" id="timer-action" value="add">
+            <input type="hidden" name="tid" id="timer-id">
+            <div class="modal-header border-0 pb-0"><h6 class="fw-bold" id="timer-title">新增定时发送</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-3"><label class="small">类型</label><select name="m_type" id="t-m-type" class="form-select form-select-sm"><option>文本内容</option><option>图片</option><option>视频</option></select></div>
+                    <div class="col-md-9"><label class="small">媒体 URL</label><input type="text" name="m_url" id="t-m-url" class="form-control form-control-sm"></div>
                 </div>
-                <div class="mb-3"><label class="small fw-bold mb-2">正文内容 (支持链接和加粗)</label><div id="ed-timer" style="height: 180px;"></div><input type="hidden" name="content" id="in-timer"></div>
-                <div class="row mb-3">
-                    <div class="col-md-4"><label class="small fw-bold">频率 (小时)</label><input type="number" name="hours" class="form-control form-control-sm" value="3"></div>
-                    <div class="col-md-8"><label class="small fw-bold">任务备注</label><input type="text" name="remark" class="form-control form-control-sm" placeholder="例如：晚场广告"></div>
+                <div class="mb-3"><div id="ed-timer"></div><input type="hidden" name="content" id="in-timer"></div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4"><label class="small">备注</label><input type="text" name="remark" id="t-remark" class="form-control form-control-sm" required></div>
+                    <div class="col-md-4"><label class="small">频率 (小时)</label><input type="number" name="hours" id="t-hours" class="form-control form-control-sm" value="3"></div>
+                    <div class="col-md-4"><label class="small">自动置顶</label><select name="is_pin" id="t-pin" class="form-select form-select-sm"><option value="0">否</option><option value="1">是</option></select></div>
                 </div>
-                <div class="row mb-3">
-                    <div class="col-md-6"><label class="small">开始发送时间</label><input type="datetime-local" name="start" class="form-control form-control-sm"></div>
-                    <div class="col-md-6"><label class="small">停止发送时间</label><input type="datetime-local" name="end" class="form-control form-control-sm"></div>
+                <div class="row g-2">
+                    <div class="col-md-6"><label class="small">开始时间</label><input type="datetime-local" name="start" id="t-start" class="form-control form-control-sm"></div>
+                    <div class="col-md-6"><label class="small">结束时间</label><input type="datetime-local" name="end" id="t-end" class="form-control form-control-sm"></div>
                 </div>
-                <div class="form-check form-switch mt-2"><input class="form-check-input" type="checkbox" name="is_pin" value="1"><label class="small ms-2">开启自动置顶</label></div>
             </div>
-            <div class="modal-footer border-0"><button type="submit" class="btn btn-primary px-5" onclick="syncTimer()">启动任务</button></div>
+            <div class="modal-footer border-0"><button type="submit" class="btn btn-primary btn-sm px-5" onclick="syncTimer()">提交任务</button></div>
         </form>
     </div>
 </div>
@@ -144,12 +150,8 @@
 <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // 配置富文本编辑器（包含超链接）
-    var toolbarOptions = [['bold', 'italic', 'underline', 'link'], [{ 'color': [] }], ['clean']];
-    var qCfg = { theme: 'snow', modules: { toolbar: toolbarOptions } };
-    
+    var qCfg = { theme: 'snow', modules: { toolbar: [['bold', 'italic', 'underline', 'link'], [{color:[]}], ['clean']] } };
     var qList = new Quill('#ed-list', qCfg), qCheck = new Quill('#ed-check', qCfg), qTime = new Quill('#ed-timer', qCfg);
-    
     var curEd = qList;
     qList.on('selection-change', r => { if(r) curEd = qList; });
     qCheck.on('selection-change', r => { if(r) curEd = qCheck; });
@@ -158,7 +160,36 @@
     function syncAll(){ document.getElementById('in-list').value = qList.root.innerHTML; document.getElementById('in-check').value = qCheck.root.innerHTML; }
     function syncTimer(){ document.getElementById('in-timer').value = qTime.root.innerHTML; }
     
-    // 板块切换
+    // 老师数据打包
+    function packUserData() {
+        let obj = {};
+        document.querySelectorAll('.dyn-input').forEach(i => obj[i.dataset.key] = i.value);
+        document.getElementById('in-user-data').value = JSON.stringify(obj);
+    }
+
+    // 定时任务逻辑 (新增与回显)
+    const tModal = new bootstrap.Modal('#timerModal');
+    function openTimerModal() {
+        document.getElementById('timer-action').value = 'add';
+        document.getElementById('timer-title').innerText = '新增定时发送';
+        qTime.root.innerHTML = '';
+        tModal.show();
+    }
+    function editTimer(data) {
+        document.getElementById('timer-action').value = 'edit';
+        document.getElementById('timer-id').value = data.id;
+        document.getElementById('timer-title').innerText = '编辑定时发送';
+        document.getElementById('t-m-type').value = data.media_type;
+        document.getElementById('t-m-url').value = data.media_url || '';
+        document.getElementById('t-remark').value = data.remark;
+        document.getElementById('t-hours').value = data.interval_hours;
+        document.getElementById('t-pin').value = data.is_pin;
+        document.getElementById('t-start').value = data.start_time || '';
+        document.getElementById('t-end').value = data.end_time || '';
+        qTime.root.innerHTML = data.content;
+        tModal.show();
+    }
+
     function showSec(id, el){
         document.querySelectorAll('section').forEach(s => s.style.display = 'none');
         document.getElementById(id).style.display = 'block';
@@ -166,10 +197,9 @@
         el.classList.add('active');
     }
 
-    // 搜索
-    document.getElementById('userSearch').addEventListener('input', e => {
+    document.getElementById('uSearch').addEventListener('input', e => {
         let v = e.target.value.toLowerCase();
-        document.querySelectorAll('#userTable tbody tr').forEach(tr => tr.style.display = tr.innerText.toLowerCase().includes(v) ? '' : 'none');
+        document.querySelectorAll('#uTable tbody tr').forEach(tr => tr.style.display = tr.innerText.toLowerCase().includes(v) ? '' : 'none');
     });
 </script>
 </body>
