@@ -1,9 +1,43 @@
-<div class="sidebar pt-4 d-flex flex-column">
-    <div class="px-4 mb-4 fw-bold text-primary fs-5 border-bottom pb-3">BotHub 控制台</div>
-    <div class="nav flex-column">
-        <div class="nav-link active" onclick="showSec('sec-base', this)"><i class="bi bi-sliders me-2"></i> 基础设置</div>
-        <div class="nav-link" onclick="showSec('sec-users', this)"><i class="bi bi-people me-2"></i> 老师管理</div>
-        <div class="nav-link" onclick="showSec('sec-timers', this)"><i class="bi bi-clock-history me-2"></i> 定时任务</div>
-        <div class="mt-auto p-4 small text-muted">Version 1.2</div>
-    </div>
+<div class="d-flex flex-column flex-shrink-0 p-3 bg-white shadow-sm sidebar-container" style="width: 240px; min-height: 80vh; border-radius: 15px;">
+    <ul class="nav nav-pills flex-column mb-auto">
+        <li class="nav-item">
+            <a href="/manage?sid={{ sid }}&gid={{ gid }}" class="nav-link {% if request.url.path == '/manage' %}active{% else %}link-dark{% endif %}" aria-current="page">
+                <i class="bi bi-people me-2"></i> 用户管理
+            </a>
+        </li>
+        <li>
+            <a href="/group_settings?sid={{ sid }}&gid={{ gid }}" class="nav-link link-dark">
+                <i class="bi bi-gear me-2"></i> 群组设置
+            </a>
+        </li>
+        <li>
+            <a href="/checkin_logs?sid={{ sid }}&gid={{ gid }}" class="nav-link link-dark">
+                <i class="bi bi-calendar-check me-2"></i> 打卡记录
+            </a>
+        </li>
+        <hr>
+        <li>
+            <div class="small text-muted px-3">当前群组:</div>
+            <div class="small fw-bold px-3 text-truncate">{{ gid }}</div>
+        </li>
+    </ul>
 </div>
+
+<style>
+    .sidebar-container .nav-link {
+        border-radius: 10px;
+        margin-bottom: 5px;
+        transition: all 0.3s;
+    }
+    .sidebar-container .nav-link.active {
+        background-color: #0d6efd;
+        color: white !important;
+    }
+    .sidebar-container .nav-link:hover:not(.active) {
+        background-color: #f0f2f5;
+    }
+    /* 移动端隐藏侧边栏的逻辑（可选） */
+    @media (max-width: 768px) {
+        .sidebar-container { width: 100% !important; min-height: auto !important; margin-bottom: 20px; }
+    }
+</style>
