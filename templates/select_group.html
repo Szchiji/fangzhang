@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container text-center mb-5">
+    <h3 class="fw-bold text-dark">🏢 机器人管理中心</h3>
+    <p class="text-muted">请选择您需要配置的群组或频道</p>
+</div>
+
+<div class="row row-cols-1 row-cols-md-3 g-4 justify-content-center">
+    {% for g in groups %}
+    <div class="col">
+        <div class="card h-100 transition-up">
+            <div class="card-body p-4 text-center">
+                <div class="bg-primary-subtle text-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                    <i class="bi bi-chat-left-text-fill fs-3"></i>
+                </div>
+                <h5 class="card-title fw-bold text-truncate">{{ g[1] }}</h5>
+                <p class="card-text small text-muted mb-4">ID: {{ g[0] }}</p>
+                <a href="/settings?sid={{ sid }}&gid={{ g[0] }}" class="btn btn-primary w-100 rounded-pill">
+                    进入管理中心 <i class="bi bi-arrow-right ms-1"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<style>
+    .transition-up:hover { transform: translateY(-5px); transition: 0.3s; }
+</style>
+{% endblock %}
