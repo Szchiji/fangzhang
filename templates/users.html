@@ -1,72 +1,64 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card p-4 shadow-sm">
+<div class="card p-4">
     <div class="d-flex justify-content-between mb-4">
-        <h5 class="fw-bold m-0">认证用户管理</h5>
-        <button class="btn btn-dark rounded-pill px-4" onclick="openUserModal()">+ 新增授权</button>
+        <h5 class="fw-bold">👥 认证用户管理</h5>
+        <button class="btn btn-dark rounded-pill" onclick="openU()">+ 新增授权</button>
     </div>
-    <div class="table-responsive">
-        <table class="table align-middle">
-            <thead class="table-light">
-                <tr class="small text-muted"><th>姓名</th><th>地区/老师</th><th>有效期</th><th>管理操作</th></tr>
-            </thead>
-            <tbody>
-                {% for u in users %}
-                <tr>
-                    <td><b>{{u[2]}}</b><br><small class="text-muted">{{u[0]}}</small></td>
-                    <td>{{u[4] or '-'}} / {{u[5] or '-'}}</td>
-                    <td><span class="badge bg-light text-dark">{{u[7] or '永久'}}</span></td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary border-0 me-2" onclick="editUser('{{u[0]}}','{{u[2]}}','{{u[4]}}','{{u[5]}}','{{u[7]}}')"><i class="bi bi-pencil-square"></i> 修改</button>
-                        <button class="btn btn-sm btn-outline-danger border-0" onclick="delUser('{{u[0]}}')"><i class="bi bi-trash"></i></button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    <table class="table align-middle">
+        <thead><tr class="small"><th>姓名/UID</th><th>地区/老师</th><th>有效期</th><th>管理</th></tr></thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td><b>{{u[2]}}</b><br><small>{{u[0]}}</small></td>
+                <td>{{u[4] or '-'}} / {{u[5] or '-'}}</td>
+                <td><span class="badge bg-light text-dark">{{u[7] or '永久'}}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editU('{{u[0]}}','{{u[2]}}','{{u[4]}}','{{u[5]}}','{{u[7]}}')">修改</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 
 <div class="modal fade" id="uModal" tabindex="-1">
     <div class="modal-dialog">
-        <form id="uForm" class="modal-content p-4 border-0">
-            <h6 class="fw-bold mb-4" id="modalTitle">新增成员授权</h6>
-            <div class="mb-2"><label class="small fw-bold">用户数字 ID</label><input type="text" name="user_id" id="f_uid" class="form-control" required></div>
-            <div class="mb-2"><label class="small fw-bold">姓名</label><input type="text" name="name" id="f_name" class="form-control" required></div>
+        <form id="uForm" class="modal-content p-4">
+            <h6 class="fw-bold mb-3" id="utitle">新增授权</h6>
+            <div class="mb-2"><label class="small fw-bold">用户 ID</label><input type="text" name="user_id" id="u_id" class="form-control"></div>
+            <div class="mb-2"><label class="small fw-bold">姓名</label><input type="text" name="name" id="u_name" class="form-control"></div>
             <div class="row mb-2">
-                <div class="col-6"><label class="small fw-bold">地区</label><input type="text" name="area" id="f_area" class="form-control"></div>
-                <div class="col-6"><label class="small fw-bold">老师</label><input type="text" name="teacher" id="f_teacher" class="form-control"></div>
+                <div class="col-6"><label class="small fw-bold">地区</label><input type="text" name="area" id="u_area" class="form-control"></div>
+                <div class="col-6"><label class="small fw-bold">老师</label><input type="text" name="teacher" id="u_teacher" class="form-control"></div>
             </div>
-            <div class="mb-4"><label class="small fw-bold">有效期至</label><input type="date" name="expire_at" id="f_expire" class="form-control"></div>
-            <button type="button" onclick="saveUser()" class="btn btn-primary w-100 py-2 rounded-pill fw-bold">确认提交</button>
+            <div class="mb-4"><label class="small fw-bold">有效期</label><input type="date" name="expire_at" id="u_expire" class="form-control"></div>
+            <button type="button" class="btn btn-primary w-100 rounded-pill" onclick="saveU()">保存</button>
         </form>
     </div>
 </div>
 
 <script>
-const userModal = new bootstrap.Modal('#uModal');
-
-function openUserModal() {
-    document.getElementById('uForm').reset();
-    document.getElementById('f_uid').readOnly = false;
-    document.getElementById('modalTitle').innerText = "新增成员授权";
-    userModal.show();
+const uModal = new bootstrap.Modal('#uModal');
+function openU() { 
+    document.getElementById('uForm').reset(); 
+    document.getElementById('u_id').readOnly = false;
+    document.getElementById('utitle').innerText = "新增授权";
+    uModal.show(); 
 }
-
-function editUser(uid, name, area, teacher, expire) {
-    document.getElementById('f_uid').value = uid;
-    document.getElementById('f_uid').readOnly = true; // 修改时 ID 不可变
-    document.getElementById('f_name').value = name;
-    document.getElementById('f_area').value = area;
-    document.getElementById('f_teacher').value = teacher;
-    document.getElementById('f_expire').value = expire;
-    document.getElementById('modalTitle').innerText = "修改成员信息";
-    userModal.show();
+function editU(id, name, area, teacher, expire) {
+    document.getElementById('u_id').value = id;
+    document.getElementById('u_id').readOnly = true;
+    document.getElementById('u_name').value = name;
+    document.getElementById('u_area').value = area;
+    document.getElementById('u_teacher').value = teacher;
+    document.getElementById('u_expire').value = expire;
+    document.getElementById('utitle').innerText = "修改认证信息";
+    uModal.show();
 }
-
-async function saveUser() {
+async function saveU() {
     const fd = new FormData(document.getElementById('uForm'));
-    fd.append('sid', '{{sid}}'); fd.append('gid', '{{gid}}');
+    fd.append('sid','{{sid}}'); fd.append('gid','{{gid}}');
     await fetch('/api/add_user', { method: 'POST', body: fd });
     location.reload();
 }
