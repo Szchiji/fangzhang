@@ -1,53 +1,90 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>BotAdmin Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>机器人管理中枢</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <style>
-        body { background: #f4f7fe; font-family: 'Inter', sans-serif; }
-        .sidebar { background: #fff; border-radius: 15px; height: 85vh; position: sticky; top: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
-        .nav-link { color: #64748b; border-radius: 10px; margin-bottom: 5px; }
-        .nav-link.active { background: #4361ee; color: #fff; }
-        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
-        .toast-msg { background: #2ecc71; color: #fff; padding: 12px 20px; border-radius: 10px; margin-bottom: 10px; animation: slideIn 0.3s; }
-        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        :root { --p-color: #4361ee; --bg-color: #f4f7fe; }
+        body { background: var(--bg-color); font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        
+        /* 侧边栏与卡片样式 */
+        .sidebar { background: #fff; border-radius: 16px; min-height: 85vh; position: sticky; top: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .card { border: none; border-radius: 16px; box-shadow: 0 5px 15px rgba(0,0,0,0.02); margin-bottom: 20px; }
+        
+        /* 导航链接 */
+        .nav-link { color: #64748b; padding: 12px 18px; border-radius: 10px; margin-bottom: 5px; transition: 0.3s; }
+        .nav-link:hover { background: #f8fafc; color: var(--p-color); }
+        .nav-link.active { background: var(--p-color); color: #fff; box-shadow: 0 4px 12px rgba(67,97,238,0.3); }
+        
+        /* AJAX 气泡提醒 */
+        #toast-container { position: fixed; top: 25px; right: 25px; z-index: 9999; }
+        .toast-msg { background: #2ecc71; color: #fff; padding: 14px 28px; border-radius: 12px; margin-bottom: 12px; 
+                     box-shadow: 0 8px 20px rgba(46,204,113,0.3); animation: slideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes slideIn { from { transform: translateX(120%); } to { transform: translateX(0); } }
+        
+        /* 按钮与输入框微调 */
+        .btn-primary { background: var(--p-color); border: none; }
+        .form-control:focus, .form-select:focus { border-color: var(--p-color); box-shadow: 0 0 0 0.25rem rgba(67,97,238,0.1); }
+        .ql-container { font-family: inherit; font-size: 14px; }
     </style>
 </head>
 <body>
     <div id="toast-container"></div>
-    <div class="container-fluid py-4">
-        <div class="row px-md-4">
+
+    <div class="container-fluid py-4 px-md-5">
+        <div class="row">
             <div class="col-md-3">
-                <div class="sidebar p-4">
-                    <h5 class="fw-bold text-primary mb-4">管理控制台</h5>
-                    <div class="nav flex-column nav-pills small">
-                        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=basic" class="nav-link {% if tab=='basic' %}active{% endif %}">⚙️ 基础设置</a>
-                        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=checkin" class="nav-link {% if tab=='checkin' %}active{% endif %}">✅ 打卡系统</a>
-                        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=query" class="nav-link {% if tab=='query' %}active{% endif %}">🔍 在线查询</a>
-                        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=tasks" class="nav-link {% if tab=='tasks' %}active{% endif %}">⏰ 定时任务</a>
-                        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=users" class="nav-link {% if tab=='users' %}active{% endif %}">👤 认证管理</a>
-                    </div>
-                </div>
+                {% include 'sidebar.html' %}
             </div>
-            <div class="col-md-9">{% block content %}{% endblock %}</div>
+            
+            <div class="col-md-9">
+                {% block content %}{% endblock %}
+            </div>
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     <script>
+        // AJAX 通用提交函数
         async function ajaxSubmit(formId, url) {
-            const fd = new FormData(document.getElementById(formId));
+            const form = document.getElementById(formId);
+            const fd = new FormData(form);
+            
+            // 如果页面上有 Quill 编辑器，自动同步内容
+            if(window.quill) {
+                fd.append('value', window.quill.root.innerHTML);
+            }
+            
             try {
                 const res = await fetch(url, { method: 'POST', body: fd });
-                if(res.ok) showToast("✅ 设置保存成功");
-            } catch { showToast("❌ 网络错误", "danger"); }
+                if(res.ok) {
+                    showToast("✅ 数据同步成功");
+                } else {
+                    showToast("❌ 提交失败，请检查登录状态", "danger");
+                }
+            } catch (e) {
+                showToast("⚠️ 网络通信异常", "danger");
+            }
         }
-        function showToast(m, t="success") {
+
+        // 气泡提醒函数
+        function showToast(m, type="success") {
+            const container = document.getElementById('toast-container');
             const el = document.createElement('div');
-            el.className = `toast-msg ${t=='danger'?'bg-danger':''}`;
-            el.innerText = m;
-            document.getElementById('toast-container').appendChild(el);
-            setTimeout(() => el.remove(), 3000);
+            el.className = `toast-msg ${type === 'danger' ? 'bg-danger' : ''}`;
+            el.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>${m}`;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateX(100%)';
+                el.style.transition = '0.4s';
+                setTimeout(() => el.remove(), 400);
+            }, 3000);
         }
     </script>
 </body>
