@@ -1,0 +1,22 @@
+<div class="modal-body">
+    <select name="content_type" class="form-select mb-3">
+        <option value="text">纯文本消息</option>
+        <option value="photo">图片消息 (URL)</option>
+    </select>
+    <div id="task-editor" style="height: 150px;"></div>
+    
+    <div class="mt-3">
+        <label class="small text-muted">附加按钮 (JSON 或 动态生成):</label>
+        <div id="btn-area"></div>
+        <button type="button" class="btn btn-sm btn-light border w-100" onclick="addBtn()">+ 新增按钮一行</button>
+    </div>
+</div>
+
+<script>
+    function addBtn() {
+        const div = document.createElement('div');
+        div.className = "input-group input-group-sm mt-2";
+        div.innerHTML = `<input type="text" placeholder="文字" class="form-control"><input type="text" placeholder="链接" class="form-control">`;
+        document.getElementById('btn-area').appendChild(div);
+    }
+</script>
