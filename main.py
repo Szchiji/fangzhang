@@ -1,5 +1,5 @@
 import os, asyncio, sqlite3, uuid, logging, time
-from datetime import datetime, timedelta
+from datetime import datetime
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -10,7 +10,7 @@ from aiogram.types import ReactionTypeEmoji, ChatPermissions
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import uvicorn
 
-# --- 配置 ---
+# --- 基础配置 ---
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 DOMAIN = os.getenv("RAILWAY_STATIC_URL", "localhost:8080").rstrip('/')
@@ -19,24 +19,35 @@ if not DOMAIN.startswith('http'): DOMAIN = f"https://{DOMAIN}"
 DB_PATH = "/data/bot.db"
 os.makedirs("/data", exist_ok=True)
 
+logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 auth_states = {}
 
+# --- 数据库初始化 (含自动补丁) ---
 def get_db():
     conn = sqlite3.connect(DB_PATH); conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
     with get_db() as conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS groups (group_id INTEGER PRIMARY KEY, group_name TEXT, like_emoji TEXT DEFAULT '👍', list_template TEXT DEFAULT '✅ {area} {name} [价格:{price}] [身材:{chest}]')")
-        conn.execute("CREATE TABLE IF NOT EXISTS verified_users (user_id INTEGER, group_id INTEGER, name TEXT, area TEXT, price TEXT, chest_size TEXT, sort_order INTEGER DEFAULT 0, PRIMARY KEY(user_id, group_id))")
-        conn.execute("CREATE TABLE IF NOT EXISTS checkins (user_id INTEGER, group_id INTEGER, checkin_date TEXT, PRIMARY KEY(user_id, group_id, checkin_date))")
+        conn.execute('''CREATE TABLE IF NOT EXISTS groups (
+            group_id INTEGER PRIMARY KEY, group_name TEXT, 
+            like_emoji TEXT DEFAULT '👍', 
+            list_template TEXT DEFAULT '✅ {area} {name} [价格:{price}] [身材:{chest}]')''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS verified_users (
+            user_id INTEGER, group_id INTEGER, name TEXT, area TEXT, 
+            price TEXT, chest_size TEXT, sort_order INTEGER DEFAULT 0, 
+            expire_at INTEGER DEFAULT 0, PRIMARY KEY(user_id, group_id))''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS checkins (
+            user_id INTEGER, group_id INTEGER, checkin_date TEXT, 
+            PRIMARY KEY(user_id, group_id, checkin_date))''')
         try: conn.execute("ALTER TABLE verified_users ADD COLUMN expire_at INTEGER DEFAULT 0")
         except: pass
 
+# --- 后台巡逻：每分钟检查一次过期 ---
 async def auto_mute_task():
     while True:
         now_ts = int(time.time())
@@ -45,9 +56,48 @@ async def auto_mute_task():
             for u in expired:
                 try: 
                     await bot.restrict_chat_member(u['group_id'], u['user_id'], permissions=ChatPermissions(can_send_messages=False))
-                    logging.info(f"Muted expired user: {u['name']}")
-                except: pass
+                    logging.info(f"禁言过期用户: {u['name']}")
+                except Exception as e: logging.error(f"禁言失败: {e}")
         await asyncio.sleep(60)
+
+# --- 机器人群组交互 ---
+@dp.message(F.chat.type.in_({"group", "supergroup"}))
+async def group_handler(msg: types.Message):
+    gid, uid, today = msg.chat.id, msg.from_user.id, datetime.now().strftime('%Y-%m-%d')
+    with get_db() as conn:
+        conn.execute("INSERT OR IGNORE INTO groups (group_id, group_name) VALUES (?,?)", (gid, msg.chat.title))
+        group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
+        user = conn.execute("SELECT * FROM verified_users WHERE user_id=? AND group_id=?", (uid, gid)).fetchone()
+
+    # 1. 自动点赞 (认证用户)
+    if user and msg.text != "打卡":
+        if user['expire_at'] == 0 or user['expire_at'] > time.time():
+            try: await msg.react([ReactionTypeEmoji(emoji=group['like_emoji'])])
+            except: pass
+
+    # 2. 打卡逻辑
+    if msg.text == "打卡":
+        if not user: return
+        with get_db() as conn:
+            exist = conn.execute("SELECT 1 FROM checkins WHERE user_id=? AND group_id=? AND checkin_date=?", (uid, gid, today)).fetchone()
+            if exist:
+                await msg.reply("ℹ️ 您今天已经打过卡了。")
+            else:
+                conn.execute("INSERT INTO checkins VALUES (?,?,?)", (uid, gid, today))
+                conn.commit()
+                await msg.reply(f"✅ 【{user['name']}】打卡成功！")
+
+    # 3. 榨汁列表
+    if msg.text in ["今日榨汁", "今日名单"]:
+        with get_db() as conn:
+            users = conn.execute('''SELECT v.* FROM verified_users v JOIN checkins c ON v.user_id = c.user_id 
+                                 AND v.group_id = c.group_id WHERE v.group_id=? AND c.checkin_date=? 
+                                 ORDER BY v.sort_order DESC''', (gid, today)).fetchall()
+        if not users: return await msg.answer("📅 今日暂无打卡记录。")
+        res = f"<b>📅 今日名单 ({len(users)}人)</b>\n\n"
+        for u in users:
+            res += group['list_template'].format(name=u['name'], area=u['area'], price=u['price'], chest=u['chest_size']) + "\n"
+        await msg.answer(res)
 
 @dp.message(Command("start"))
 async def cmd_start(msg: types.Message):
@@ -62,33 +112,9 @@ async def handle_code(msg: types.Message):
     for sid, data in auth_states.items():
         if data["code"] == msg.text:
             data["verified"] = True
-            return await msg.answer("✅ 验证通过！")
+            return await msg.answer("✅ 验证成功！")
 
-@dp.message(F.chat.type.in_({"group", "supergroup"}))
-async def group_handler(msg: types.Message):
-    gid, uid, today = msg.chat.id, msg.from_user.id, datetime.now().strftime('%Y-%m-%d')
-    with get_db() as conn:
-        conn.execute("INSERT OR IGNORE INTO groups (group_id, group_name) VALUES (?,?)", (gid, msg.chat.title))
-        group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
-        user = conn.execute("SELECT * FROM verified_users WHERE user_id=? AND group_id=?", (uid, gid)).fetchone()
-    if user and (user['expire_at'] == 0 or user['expire_at'] > time.time()):
-        try: await msg.react([ReactionTypeEmoji(emoji=group['like_emoji'])])
-        except: pass
-    if msg.text == "打卡" and user:
-        with get_db() as conn:
-            try:
-                conn.execute("INSERT INTO checkins VALUES (?,?,?)", (uid, gid, today))
-                conn.commit()
-                await msg.reply(f"✅ {user['name']} 今日开课")
-            except: await msg.reply("ℹ️ 今日已打卡")
-    if msg.text in ["今日榨汁", "今日名单"]:
-        with get_db() as conn:
-            users = conn.execute('''SELECT v.* FROM verified_users v JOIN checkins c ON v.user_id = c.user_id AND v.group_id = c.group_id WHERE v.group_id=? AND c.checkin_date=? ORDER BY v.sort_order DESC''', (gid, today)).fetchall()
-        if not users: return await msg.answer("📅 今日暂无打卡。")
-        res = f"<b>📅 今日名单 ({len(users)}人)</b>\n\n"
-        for u in users: res += group['list_template'].format(name=u['name'], area=u['area'], price=u['price'], chest=u['chest_size']) + "\n"
-        await msg.answer(res)
-
+# --- Web 接口 ---
 @app.get("/login", response_class=HTMLResponse)
 async def web_login(request: Request, sid: str):
     return templates.TemplateResponse("login.html", {"request": request, "sid": sid, "code": auth_states.get(sid, {}).get("code")})
@@ -124,6 +150,20 @@ async def save_user(sid: str=Form(...), gid: int=Form(...), user_id: int=Form(..
         conn.commit()
     try: await bot.restrict_chat_member(gid, user_id, permissions=ChatPermissions(can_send_messages=True, can_send_other_messages=True, can_send_polls=True, can_send_photos=True, can_send_videos=True, can_send_audios=True, can_send_documents=True, can_send_video_notes=True, can_send_voice_notes=True))
     except: pass
+    return RedirectResponse(f"/manage?sid={sid}&gid={gid}", status_code=303)
+
+@app.post("/api/delete_user")
+async def delete_user(sid: str=Form(...), gid: int=Form(...), user_id: int=Form(...)):
+    with get_db() as conn:
+        conn.execute("DELETE FROM verified_users WHERE user_id=? AND group_id=?", (user_id, gid))
+        conn.commit()
+    return RedirectResponse(f"/manage?sid={sid}&gid={gid}", status_code=303)
+
+@app.post("/api/save_config")
+async def save_config(sid: str=Form(...), gid: int=Form(...), like_emoji: str=Form(...), list_template: str=Form(...)):
+    with get_db() as conn:
+        conn.execute("UPDATE groups SET like_emoji=?, list_template=? WHERE group_id=?", (like_emoji, list_template, gid))
+        conn.commit()
     return RedirectResponse(f"/manage?sid={sid}&gid={gid}", status_code=303)
 
 @app.on_event("startup")
