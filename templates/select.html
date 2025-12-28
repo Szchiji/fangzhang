@@ -1,50 +1,63 @@
-{% extends "layout.html" %}
-{% block content %}
-<div class="row justify-content-center mt-4">
-    <div class="col-lg-10">
-        <div class="d-flex align-items-center mb-4">
-            <div class="bg-primary text-white p-2 rounded-3 me-3">
-                <i class="bi bi-grid-1x2-fill fs-4"></i>
-            </div>
-            <div>
-                <h4 class="fw-bold m-0">请选择要管理的群组</h4>
-                <p class="text-muted small m-0">只有机器人加入并设为管理员的群组才会显示在此处</p>
-            </div>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>选择管理目标 - 7GEE PRO</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        body { background: #f1f5f9; height: 100vh; display: flex; align-items: center; justify-content: center; font-family: system-ui; }
+        .select-card { background: white; width: 100%; max-width: 500px; border-radius: 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.05); padding: 40px; }
+        .group-item { background: #f8fafc; border: 2px solid #f1f5f9; border-radius: 20px; padding: 20px; transition: 0.3s; cursor: pointer; text-decoration: none; display: flex; align-items: center; margin-bottom: 15px; }
+        .group-item:hover { border-color: #0d6efd; background: #f0f7ff; transform: translateY(-3px); }
+        .group-icon { width: 50px; height: 50px; background: #0d6efd; color: white; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-right: 20px; }
+        .empty-state { text-align: center; padding: 30px 0; }
+        .empty-icon { font-size: 4rem; color: #cbd5e1; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="select-card">
+        <div class="text-center mb-5">
+            <h4 class="fw-bold text-dark">请选择管理的群组</h4>
+            <p class="text-muted small">当前已授权的 Telegram 机器人实例</p>
         </div>
 
-        <div class="row row-cols-1 row-cols-md-2 g-4">
-            {% for g in gs %}
-            <div class="col">
-                <div class="card h-100 p-4 border-0 shadow-sm hover-up" 
-                     style="transition: 0.3s; cursor: pointer;" 
-                     onclick="location.href='/manage?sid={{sid}}&gid={{g[0]}}&tab=basic'">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center">
-                            <div class="rounded-circle bg-light p-3 me-3">
-                                <i class="bi bi-chat-dots-fill text-primary"></i>
-                            </div>
-                            <div>
-                                <h6 class="fw-bold mb-0 text-dark">{{ g[1] or '未命名群组' }}</h6>
-                                <code class="small text-muted">{{ g[0] }}</code>
-                            </div>
-                        </div>
-                        <i class="bi bi-chevron-right text-muted"></i>
+        {% if gs %}
+            <div class="group-list">
+                {% for g in gs %}
+                <a href="/manage?sid={{sid}}&gid={{gid}}&tab=basic" class="group-item">
+                    <div class="group-icon"><i class="bi bi-chat-heart-fill"></i></div>
+                    <div>
+                        <div class="fw-bold text-dark">{{ g[1] }}</div>
+                        <div class="text-muted small">ID: {{ g[0] }}</div>
                     </div>
+                    <i class="bi bi-chevron-right ms-auto text-secondary"></i>
+                </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <i class="bi bi-robot empty-icon d-block"></i>
+                <h6 class="fw-bold">尚未检测到活跃群组</h6>
+                <p class="small text-muted mb-4">机器人需要在群里“露个面”才能被后台识别。</p>
+                
+                <div class="alert alert-info text-start small border-0" style="border-radius: 15px;">
+                    <div class="fw-bold mb-1"><i class="bi bi-info-circle me-1"></i> 如何激活：</div>
+                    1. 将机器人拉入您的 Telegram 群组<br>
+                    2. 授予机器人管理员权限<br>
+                    3. 在群内发送一次 <b>打卡</b> 或 <b>/start</b>
                 </div>
+                
+                <button class="btn btn-light rounded-pill w-100 mt-3 py-2" onclick="location.reload()">
+                    <i class="bi bi-arrow-clockwise me-1"></i> 已发送指令，点击刷新
+                </button>
             </div>
-            {% endfor %}
-            
-            {% if not gs %}
-            <div class="col-12 text-center py-5">
-                <div class="text-muted mb-3"><i class="bi bi-robot" style="font-size: 4rem;"></i></div>
-                <h5 class="text-secondary">尚未发现可管理的群组</h5>
-                <p class="small text-muted">请先将机器人邀请进群并设为管理员，然后在群内发送一次消息。</p>
-            </div>
-            {% endif %}
+        {% endif %}
+
+        <div class="mt-5 text-center">
+            <span class="badge bg-light text-secondary rounded-pill px-3 py-2">管理员身份：已认证</span>
         </div>
     </div>
-</div>
-<style>
-    .hover-up:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.08) !important; border-left: 4px solid var(--p-color) !important; }
-</style>
-{% endblock %}
+</body>
+</html>
