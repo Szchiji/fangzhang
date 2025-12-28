@@ -1,52 +1,25 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="row">
-    <div class="col-md-2">{% include 'sidebar.html' %}</div>
-    <div class="col-md-10">
-        <div class="card p-4 border-0 shadow-sm">
-            <h5 class="fw-bold mb-4 text-primary">机器人配置 - {{ g[1] }}</h5>
-            <form action="/update_all" method="POST">
+    <div class="col-md-3">{% include 'sidebar.html' %}</div>
+    <div class="col-md-9">
+        <div class="card p-4">
+            <h5 class="fw-bold mb-4">打卡配置 - {{ g[1] }}</h5>
+            <form action="/update_settings" method="POST">
                 <input type="hidden" name="sid" value="{{ sid }}">
                 <input type="hidden" name="gid" value="{{ gid }}">
-
-                <div class="row mb-4">
-                    <div class="col-md-4">
-                        <label class="form-label small fw-bold">打卡指令</label>
-                        <input type="text" name="checkin_cmd" class="form-control" value="{{ g[3] }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-bold">在线/离线表情</label>
-                        <div class="input-group">
-                            <input type="text" name="on_emoji" class="form-control" value="{{ g[4] }}">
-                            <input type="text" name="off_emoji" class="form-control" value="{{ g[5] }}">
-                        </div>
+                <div class="mb-3">
+                    <label class="form-label">打卡指令</label>
+                    <input type="text" name="checkin_cmd" class="form-control" value="{{ g[3] }}">
+                </div>
+                <div class="list-group list-group-flush mb-4">
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span>打卡成功消息</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="openEditor('msg_checkin_success')">点击修改</button>
                     </div>
                 </div>
-
-                <div class="list-group list-group-flush mb-4 border-top border-bottom">
-                    {% set rich_fields = [('msg_checkin_success', '打卡成功消息'), ('msg_uncheckin_success', '休息/离线消息')] %}
-                    {% for key, label in rich_fields %}
-                    <div class="list-group-item d-flex justify-content-between align-items-center py-3 px-0 bg-transparent">
-                        <span class="fw-medium">{{ label }}</span>
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="openRichEditor('{{ key }}')">点击修改</button>
-                        <input type="hidden" name="{{ key }}" id="src_{{ key }}" value="{{ g[7] if key == 'msg_checkin_success' else g[8] }}">
-                    </div>
-                    {% endfor %}
-                </div>
-
-                <h6 class="fw-bold mt-4">查询在线设置</h6>
-                <div class="row g-3 mb-4">
-                    <div class="col-md-6">
-                        <label class="small">查询指令</label>
-                        <input type="text" name="query_cmd" class="form-control" value="{{ g[10] }}">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="small">每页显示数量</label>
-                        <input type="number" name="per_page" class="form-control" value="{{ g[11] }}">
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-primary w-100 py-2">保存所有群组配置</button>
+                <input type="hidden" name="msg_checkin_success" id="src_msg_checkin_success" value="{{ g[6] }}">
+                <button type="submit" class="btn btn-primary w-100">保存设置</button>
             </form>
         </div>
     </div>
@@ -54,34 +27,25 @@
 
 <div class="modal fade" id="richModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header"><h6 class="modal-title fw-bold">编辑富文本消息</h6></div>
+        <div class="modal-content">
             <div class="modal-body">
-                <div class="mb-2">
-                    <button class="btn btn-xs btn-light border" onclick="insertVar('{name}')">{用户姓名}</button>
-                    <button class="btn btn-xs btn-light border" onclick="insertVar('{date}')">{当前日期}</button>
-                </div>
-                <div id="editor-container" style="height: 300px;"></div>
+                <div id="editor" style="height: 300px;"></div>
             </div>
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-primary px-4" onclick="saveRich()">确定</button>
-            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-primary" onclick="save()">确定</button></div>
         </div>
     </div>
 </div>
 
 <script>
-    var quill = new Quill('#editor-container', { theme: 'snow', modules: { toolbar: [['bold', 'italic', 'underline', 'link']] } });
-    var activeId = '';
-    function openRichEditor(id) {
-        activeId = id;
-        quill.root.innerHTML = document.getElementById('src_' + id).value;
+    var quill = new Quill('#editor', { theme: 'snow' });
+    var cur = '';
+    function openEditor(id) {
+        cur = id; quill.root.innerHTML = document.getElementById('src_'+id).value;
         new bootstrap.Modal(document.getElementById('richModal')).show();
     }
-    function saveRich() {
-        document.getElementById('src_' + activeId).value = quill.root.innerHTML;
+    function save() {
+        document.getElementById('src_'+cur).value = quill.root.innerHTML;
         bootstrap.Modal.getInstance(document.getElementById('richModal')).hide();
     }
-    function insertVar(v) { const range = quill.getSelection(); quill.insertText(range ? range.index : 0, v); }
 </script>
 {% endblock %}
