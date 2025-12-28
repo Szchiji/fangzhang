@@ -8,15 +8,17 @@
     <style>
         .sidebar { width: 250px; height: 100vh; position: fixed; background: #212529; color: white; padding: 20px; }
         .main { margin-left: 250px; padding: 40px; background: #f8f9fa; min-height: 100vh; }
-        .nav-link { color: #adb5bd; cursor: pointer; padding: 12px; border-radius: 8px; }
+        .card { border-radius: 12px; border: none; }
+        .nav-link { color: #adb5bd; cursor: pointer; padding: 12px; border-radius: 8px; margin-bottom: 5px; }
         .nav-link.active { background: #0d6efd; color: white; }
+        .badge-attr { background: #e9ecef; color: #495057; font-weight: normal; margin-right: 5px; }
     </style>
 </head>
 <body>
-    <div class="sidebar d-flex flex-column">
-        <h4 class="mb-4">机器人控制</h4>
-        <nav class="nav flex-column mb-auto">
-            <a class="nav-link active" onclick="showTab('users')"><i class="bi bi-people me-2"></i> 认证管理</a>
+    <div class="sidebar">
+        <h4 class="mb-4">机器人控制中心</h4>
+        <nav class="nav flex-column">
+            <a class="nav-link active" onclick="showTab('users')"><i class="bi bi-people me-2"></i> 老师管理</a>
             <a class="nav-link" onclick="showTab('config')"><i class="bi bi-gear me-2"></i> 机器人设置</a>
             <hr>
             <a href="/portal?sid={{sid}}" class="nav-link text-info"><i class="bi bi-arrow-left me-2"></i> 切换群组</a>
@@ -26,32 +28,41 @@
     <div class="main">
         <div id="tab-users">
             <div class="d-flex justify-content-between mb-4">
-                <h3>{{ group.group_name }}</h3>
-                <button class="btn btn-primary" onclick="openAddModal()">+ 新增用户</button>
+                <h2>{{ group.group_name }}</h2>
+                <button class="btn btn-primary shadow-sm" onclick="openAddModal()">+ 添加老师</button>
             </div>
+            
             <form class="input-group mb-4" method="get" action="/manage">
                 <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                <input type="text" name="q" class="form-control" placeholder="搜索内容..." value="{{q}}">
+                <input type="text" name="q" class="form-control" placeholder="搜索 ID、名字或任何资料内容..." value="{{q}}">
                 <button class="btn btn-dark" type="submit">搜索</button>
             </form>
-            <div class="card p-3 border-0 shadow-sm">
+
+            <div class="card p-3 shadow-sm">
                 <table class="table align-middle">
-                    <thead><tr><th>排序</th><th>名字/ID</th><th>到期状态</th><th class="text-end">管理</th></tr></thead>
+                    <thead><tr><th>排序</th><th>信息</th><th>状态</th><th class="text-end">管理</th></tr></thead>
                     <tbody>
                         {% for u in users %}
                         <tr>
-                            <td>{{ u.sort_order }}</td>
-                            <td><b>{{ u.name }}</b><br><small class="text-muted">{{ u.user_id }}</small></td>
+                            <td><span class="badge bg-light text-dark border">{{ u.sort_order }}</span></td>
+                            <td>
+                                <b>{{ u.name }}</b> <small class="text-muted">({{ u.user_id }})</small><br>
+                                <div class="mt-1">
+                                    {% for k, v in (u.data_json|json_loads).items() %}
+                                    <span class="badge badge-attr small">{{k}}: {{v}}</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
                             <td>
                                 {% if u.expire_at == 0 %}<span class="badge bg-success">永久</span>
-                                {% elif u.expire_at < now %}<span class="badge bg-danger">已过期</span>
-                                {% else %}<span class="badge bg-primary">{{ ((u.expire_at-now)//86400)+1 }}天后过期</span>{% endif %}
+                                {% elif u.expire_at < now %}<span class="badge bg-danger">已过期禁言</span>
+                                {% else %}<span class="badge bg-primary">剩 {{ ((u.expire_at-now)//86400)+1 }} 天</span>{% endif %}
                             </td>
                             <td class="text-end">
                                 <button class="btn btn-sm btn-outline-primary" onclick='editUser("{{u.user_id}}","{{u.name}}","{{u.sort_order}}",{{ u.data_json|safe }})'>编辑</button>
-                                <form action="/api/delete_user" method="post" class="d-inline" onsubmit="return confirm('确定删除？')">
+                                <form action="/api/delete_user" method="post" class="d-inline">
                                     <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="user_id" value="{{u.user_id}}">
-                                    <button class="btn btn-sm btn-outline-danger">删除</button>
+                                    <button class="btn btn-sm btn-outline-danger ms-1" onclick="return confirm('确定删除？')">删除</button>
                                 </form>
                             </td>
                         </tr>
@@ -62,14 +73,34 @@
         </div>
 
         <div id="tab-config" style="display:none">
-            <h3>机器人全局配置</h3>
-            <div class="card p-4 border-0 shadow-sm">
+            <h2 class="mb-4">群组机器人全局配置</h2>
+            <div class="card p-4 shadow-sm">
                 <form action="/api/save_config" method="post">
                     <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                    <div class="mb-3"><label class="form-label fw-bold">1. 字段定义 (逗号隔开)</label><input type="text" name="custom_fields" class="form-control" value="{{ group.custom_fields }}"></div>
-                    <div class="mb-3"><label class="form-label fw-bold">2. 点赞表情</label><input type="text" name="like_emoji" class="form-control w-25" value="{{ group.like_emoji }}"></div>
-                    <div class="mb-3"><label class="form-label fw-bold">3. 名单模板 (占位符: {name} 以及上方定义的字段)</label><textarea name="list_template" class="form-control" rows="4">{{ group.list_template }}</textarea></div>
-                    <button class="btn btn-success">保存配置</button>
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">1. 资料字段定义 (用逗号隔开)</label>
+                        <input type="text" name="custom_fields" class="form-control" value="{{ group.custom_fields }}">
+                        <div class="form-text">决定添加老师时需要填写的项目，如：地区,价位,胸围,频道链接</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">2. 自动点赞表情</label>
+                        <input type="text" name="like_emoji" class="form-control w-25" value="{{ group.like_emoji }}">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">3. 名单展示模板</label>
+                        <textarea name="list_template" class="form-control" rows="4">{{ group.list_template }}</textarea>
+                        <div class="alert alert-info mt-3 small">
+                            <strong>可用占位符说明：</strong><br>
+                            <code>{onlineEmoji}</code> - 在线状态图标 | <code>{name}</code> - 老师名字<br>
+                            {% for f in group.custom_fields.split(',') %}
+                            <code>{{"{"}}{{f}}{{"}"}}</code> - {{f}} 内容 &nbsp;
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <button class="btn btn-success px-5">保存全局配置</button>
                 </form>
             </div>
         </div>
@@ -79,19 +110,24 @@
         <div class="modal-dialog modal-dialog-centered">
             <form class="modal-content" action="/api/save_user" method="post" id="userForm">
                 <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                <div class="modal-header"><h5>用户设置</h5></div>
+                <div class="modal-header"><h5>老师资料设置</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body row g-3">
-                    <div class="col-12"><label>UID</label><input type="number" name="user_id" id="f_id" class="form-control" required></div>
-                    <div class="col-12"><label>名字</label><input type="text" name="name" id="f_name" class="form-control" required></div>
+                    <div class="col-12"><label class="form-label small">Telegram UID</label><input type="number" name="user_id" id="f_id" class="form-control" required></div>
+                    <div class="col-12"><label class="form-label small">老师名字</label><input type="text" name="name" id="f_name" class="form-control" required></div>
+                    
                     <div id="dynamic-area" class="row g-3 m-0 p-0">
                         {% for f in group.custom_fields.split(',') %}
-                        <div class="col-md-6"><label>{{f}}</label><input type="text" name="{{f}}" class="form-control dyn-input" data-key="{{f}}"></div>
+                        <div class="col-md-6">
+                            <label class="form-label small">{{f}}</label>
+                            <input type="text" name="{{f}}" class="form-control dyn-input" data-key="{{f}}">
+                        </div>
                         {% endfor %}
                     </div>
-                    <div class="col-md-6"><label>权重</label><input type="number" name="sort" id="f_sort" class="form-control" value="0"></div>
-                    <div class="col-md-6"><label>天数</label><input type="number" name="days" class="form-control" value="30"></div>
+
+                    <div class="col-md-6"><label class="form-label small">排序权重</label><input type="number" name="sort" id="f_sort" class="form-control" value="0"></div>
+                    <div class="col-md-6"><label class="form-label small">授权天数 (0为永久)</label><input type="number" name="days" class="form-control" value="0"></div>
                 </div>
-                <div class="modal-footer"><button class="btn btn-primary w-100">保存设置</button></div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary w-100">保存老师信息</button></div>
             </form>
         </div>
     </div>
@@ -102,6 +138,7 @@
         function showTab(t){
             document.getElementById('tab-users').style.display=t==='users'?'block':'none';
             document.getElementById('tab-config').style.display=t==='config'?'block':'none';
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l.innerText.includes(t==='users'?'老师':'设置')));
         }
         function openAddModal(){ document.getElementById('userForm').reset(); document.getElementById('f_id').readOnly=false; modal.show(); }
         function editUser(id, n, s, data){
