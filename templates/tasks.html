@@ -5,17 +5,20 @@
 
 <div class="card p-4 border-0 shadow-sm">
     <div class="d-flex justify-content-between mb-4">
-        <h5 class="fw-bold m-0"><i class="bi bi-clock-history me-2"></i>定时任务</h5>
-        <button class="btn btn-primary rounded-pill px-4" onclick="openT()"><i class="bi bi-plus-lg"></i> 创建计划</button>
+        <h5 class="fw-bold m-0"><i class="bi bi-calendar-check me-2 text-primary"></i>定时计划</h5>
+        <button class="btn btn-primary rounded-pill px-4" onclick="openModal()"><i class="bi bi-plus-lg"></i> 新增计划</button>
     </div>
     
     <div class="row g-3">
         {% for t in tasks %}
-        <div class="col-md-6">
+        <div class="col-md-6" id="t-{{t[0]}}">
             <div class="card bg-light border-0 p-3">
-                <div class="fw-bold">{{t[4]}}</div>
-                <div class="small text-muted mt-2 text-truncate">{{t[2]|safe}}</div>
-                <div class="mt-3"><button class="btn btn-sm btn-link text-danger p-0" onclick="delT('{{t[0]}}')">删除</button></div>
+                <div class="d-flex justify-content-between fw-bold mb-2">
+                    <span>{{t[4]}}</span>
+                    <button class="btn-close small" onclick="delT('{{t[0]}}')" style="transform: scale(0.7);"></button>
+                </div>
+                <div class="small text-muted text-truncate">{{t[2]|safe}}</div>
+                <div class="mt-2 small text-primary">每 {{t[3]}} 分钟发送一次</div>
             </div>
         </div>
         {% endfor %}
@@ -26,15 +29,15 @@
     <div class="modal-dialog modal-lg">
         <form id="tForm" class="modal-content border-0">
             <div class="modal-body p-4">
-                <h6 class="fw-bold mb-4">配置富消息任务</h6>
-                <div class="mb-3"><label class="small fw-bold">任务备注</label><input type="text" name="remark" class="form-control" placeholder="输入任务名称"></div>
+                <h6 class="fw-bold mb-4">新建多媒体富消息任务</h6>
+                <div class="mb-3"><label class="small fw-bold">任务备注</label><input type="text" name="remark" class="form-control" placeholder="如：晚班提醒" required></div>
                 <div class="mb-3">
-                    <label class="small fw-bold">消息内容</label>
-                    <div id="vditor"></div>
+                    <label class="small fw-bold mb-2">消息内容</label>
+                    <div id="vditor_div"></div>
                     <input type="hidden" name="content" id="t_content">
                 </div>
-                <div class="mb-4"><label class="small fw-bold">发送间隔 (分钟)</label><input type="number" name="cron" class="form-control" value="60"></div>
-                <button type="button" onclick="saveT()" class="btn btn-primary w-100 py-3 rounded-pill shadow">确认发布任务</button>
+                <div class="mb-4"><label class="small fw-bold">周期 (分钟)</label><input type="number" name="cron" class="form-control" value="60"></div>
+                <button type="button" onclick="saveT()" class="btn btn-primary w-100 py-3 rounded-pill shadow">启动定时发布</button>
             </div>
         </form>
     </div>
@@ -42,23 +45,30 @@
 
 <script>
 let v;
-const tm = new bootstrap.Modal(document.getElementById('tModal'));
-function openT() { 
-    tm.show(); 
-    setTimeout(() => {
-        v = new Vditor('vditor', {
-            height: 300,
-            placeholder: '输入图片描述，可以不填...',
-            toolbar: ['emoji', 'bold', 'italic', 'link', 'quote', 'code', 'insert-after', 'fullscreen']
-        });
-    }, 300);
+const modal = new bootstrap.Modal(document.getElementById('tModal'));
+function openModal() {
+    modal.show();
+    if(!v) {
+        setTimeout(() => {
+            v = new Vditor('vditor_div', {
+                height: 300, theme: 'classic', icon: 'ant-design',
+                placeholder: '输入消息内容，支持图片描述...',
+                toolbar: ['emoji', 'headings', 'bold', 'italic', 'strike', '|', 'line', 'quote', 'list', 'link', 'code', 'fullscreen']
+            });
+        }, 300);
+    }
 }
 async function saveT() {
     document.getElementById('t_content').value = v.getHTML();
     const fd = new FormData(document.getElementById('tForm'));
-    fd.append('sid', '{{sid}}'); fd.append('gid', '{{gid}}');
+    fd.append('sid','{{sid}}'); fd.append('gid','{{gid}}');
     await fetch('/api/add_task', {method:'POST', body:fd});
     location.reload();
+}
+async function delT(tid) {
+    const fd = new FormData(); fd.append('sid','{{sid}}'); fd.append('tid',tid);
+    await fetch('/api/del_task', {method:'POST', body:fd});
+    document.getElementById(`t-${tid}`).remove();
 }
 </script>
 {% endblock %}
