@@ -2,8 +2,8 @@
 {% block content %}
 <div class="card p-4">
     <div class="d-flex align-items-center mb-4">
-        <div class="bg-primary-soft text-primary p-2 rounded-3 me-3">
-            <i class="bi bi-sliders2-vertical fs-4"></i>
+        <div class="bg-primary-soft text-primary p-2 rounded-3 me-3" style="background: rgba(67,97,238,0.1);">
+            <i class="bi bi-gear-wide-connected fs-4"></i>
         </div>
         <h5 class="fw-bold m-0">基础功能配置</h5>
     </div>
@@ -12,34 +12,56 @@
         <input type="hidden" name="sid" value="{{sid}}">
         <input type="hidden" name="gid" value="{{gid}}">
         
-        <div class="mb-4">
-            <label class="small fw-bold text-muted mb-2 d-block">机器人服务状态</label>
-            <div class="form-check form-switch p-0 d-flex align-items-center">
-                <input class="form-check-input ms-0 me-2" type="checkbox" name="is_on" {% if g[2] %}checked{% endif %} style="width: 45px; height: 22px;">
-                <label class="form-check-label">开启机器人响应</label>
+        <div class="row g-4">
+            <div class="col-12">
+                <div class="p-3 rounded-3 border bg-light d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="fw-bold mb-1">机器人服务状态</h6>
+                        <small class="text-muted">关闭后机器人将不再响应任何打卡和查询指令</small>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="is_on" style="width: 50px; height: 25px;" 
+                               {% if g[2] == 1 %}checked{% endif %} onchange="updateValue('is_on', this.checked ? 1 : 0)">
+                    </div>
+                </div>
             </div>
-        </div>
 
-        <div class="row g-3">
             <div class="col-md-6">
-                <label class="small fw-bold text-muted">群组显示名称</label>
-                <input type="text" name="group_name" class="form-control" value="{{g[1]}}">
+                <label class="small fw-bold text-muted mb-2">群组显示名称</label>
+                <input type="text" class="form-control py-2" value="{{ g[1] }}" 
+                       onchange="updateValue('group_name', this.value)" placeholder="例如：某某官方群">
             </div>
-            <div class="col-md-6">
-                <label class="small fw-bold text-muted">指令自动删除时间 (秒)</label>
-                <input type="number" name="del_sec" class="form-control" value="{{g[11] or 0}}" placeholder="0 为不删除">
-                <div class="form-text mt-1">设置后，用户指令和机器人回复将定时消失。</div>
-            </div>
-        </div>
 
-        <hr class="my-4 opacity-50">
-        
-        <div class="d-flex justify-content-between align-items-center">
-            <span class="text-muted small"><i class="bi bi-info-circle me-1"></i> 修改后即刻生效，无需重启机器人</span>
-            <button type="button" onclick="ajaxSubmit('basicForm', '/api/save')" class="btn btn-primary px-5 rounded-pill shadow-sm">
-                保存全局设置
-            </button>
+            <div class="col-md-6">
+                <label class="small fw-bold text-muted mb-2">指令自动撤回 (秒)</label>
+                <input type="number" class="form-control py-2" value="{{ g[11] or 0 }}" 
+                       onchange="updateValue('del_sec', this.value)" placeholder="0 为不撤回">
+            </div>
+
+            <div class="col-12 mt-4">
+                <hr class="opacity-10">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="small text-muted"><i class="bi bi-info-circle me-1"></i> 所有修改在失去焦点或切换开关时自动准备就绪</span>
+                    <button type="button" onclick="showToast('✅ 全局配置已更新')" class="btn btn-primary px-5 rounded-pill shadow">确认保存</button>
+                </div>
+            </div>
         </div>
     </form>
 </div>
+
+<script>
+    // 基础页面专用的 AJAX 更新函数，直接修改对应字段
+    async function updateValue(field, value) {
+        const fd = new FormData();
+        fd.append('sid', '{{sid}}');
+        fd.append('gid', '{{gid}}');
+        fd.append('field', field);
+        fd.append('value', value);
+        
+        const res = await fetch('/api/save', { method: 'POST', body: fd });
+        if(res.ok) {
+            showToast(`已更新: ${field}`);
+        }
+    }
+</script>
 {% endblock %}
