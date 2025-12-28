@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>群组管理</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4>设置: {{ group.group_name }}</h4>
+            <a href="/portal?sid={{ sid }}" class="btn btn-outline-secondary btn-sm">返回</a>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">➕ 添加/修改老师 (打卡白名单)</div>
+            <div class="card-body">
+                <form action="/api/save_user" method="post" class="row g-3">
+                    <input type="hidden" name="sid" value="{{ sid }}">
+                    <input type="hidden" name="gid" value="{{ gid }}">
+                    
+                    <div class="col-md-4">
+                        <input type="number" name="user_id" class="form-control" placeholder="Telegram 用户ID (必填)" required>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" name="name" class="form-control" placeholder="展示昵称 (必填)" required>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" name="area" class="form-control" placeholder="地区 (如: 上海)">
+                    </div>
+                    <div class="col-md-6">
+                        <input type="text" name="price" class="form-control" placeholder="价格 (如: 1000P)">
+                    </div>
+                    <div class="col-md-6">
+                        <input type="text" name="chest" class="form-control" placeholder="身材 (如: C罩杯)">
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary w-100">保存老师信息</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">📜 已认证老师列表</div>
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead class="table-light"><tr><th>ID</th><th>名字</th><th>地区</th><th>状态</th></tr></thead>
+                    <tbody>
+                        {% for u in users %}
+                        <tr>
+                            <td>{{ u.user_id }}</td>
+                            <td>{{ u.name }}</td>
+                            <td>{{ u.area }}</td>
+                            <td><span class="badge bg-success">可打卡</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
