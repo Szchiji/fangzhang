@@ -8,8 +8,10 @@ from aiogram.filters import Command
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import ChatPermissions
 
-# --- 配置 ---
-TOKEN = os.getenv("BOT_TOKEN")
+# --- 1. 配置加载 ---
+TOKEN = os.getenv("TOKEN", "您的默认TOKEN")
+# 获取授权管理员列表
+ADMIN_IDS = os.getenv("ADMIN_IDS", "").split(',')
 DOMAIN = os.getenv("RAILWAY_STATIC_URL", "localhost:8080").rstrip('/')
 if not DOMAIN.startswith('http'): DOMAIN = f"https://{DOMAIN}"
 
@@ -20,9 +22,10 @@ bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
+
 auth_sessions = {}
 
-# --- 数据库初始化 ---
+# --- 2. 数据库初始化 ---
 def get_db():
     conn = sqlite3.connect(DB_PATH); conn.row_factory = sqlite3.Row
     return conn
@@ -48,9 +51,16 @@ def init_db():
         conn.execute('''CREATE TABLE IF NOT EXISTS checkins (
             user_id TEXT, group_id TEXT, checkin_date TEXT, 
             PRIMARY KEY(user_id, group_id, checkin_date))''')
+
+        # 修复列缺失
+        try: conn.execute("ALTER TABLE verified_users ADD COLUMN expire_date TEXT")
+        except: pass
+        for col in ["start_time", "end_time", "delete_last", "last_msg_id"]:
+            try: conn.execute(f"ALTER TABLE timers ADD COLUMN {col} TEXT")
+            except: pass
         conn.commit()
 
-# --- 核心渲染与逻辑 ---
+# --- 3. 渲染引擎 ---
 def power_render(template, data_json, name):
     try: data = json.loads(data_json or "{}")
     except: data = {}
@@ -62,14 +72,32 @@ def power_render(template, data_json, name):
     final_text = re.sub(r'\{(\w+)\}', replace_match, text)
     return re.sub(r'<(?!b|i|u|code|a|s|strong|em)[^>]+>', '', final_text).strip()
 
+# --- 4. 机器人指令逻辑 ---
+
 @dp.message(Command("start"))
 async def cmd_start(msg: types.Message):
-    sid = str(uuid.uuid4())
-    auth_sessions[sid] = {"gid": str(msg.chat.id), "exp": time.time() + 3600}
-    kb = types.InlineKeyboardMarkup(inline_keyboard=[[
-        types.InlineKeyboardButton(text="🔐 进入管理后台", url=f"{DOMAIN}/manage?sid={sid}&gid={msg.chat.id}")
-    ]])
-    await msg.answer(f"🤖 <b>控制台已就绪</b>\n群组: {msg.chat.title}\n请点击按钮登录：", reply_markup=kb)
+    """
+    只有在 ADMIN_IDS 里的用户才能触发
+    """
+    user_id = str(msg.from_user.id)
+    if user_id not in ADMIN_IDS:
+        return # 机器人直接无视非管理员的指令
+
+    if msg.chat.type in ["group", "supergroup"]:
+        # 生成唯一登录 Session
+        sid = str(uuid.uuid4())
+        auth_sessions[sid] = {"gid": str(msg.chat.id), "exp": time.time() + 7200}
+        
+        kb = types.InlineKeyboardMarkup(inline_keyboard=[[
+            types.InlineKeyboardButton(text="📱 点击进入手机后台", url=f"{DOMAIN}/manage?sid={sid}&gid={msg.chat.id}")
+        ]])
+        
+        try:
+            # 必须通过私聊发送，防止链接泄露
+            await bot.send_message(msg.from_user.id, f"🔑 <b>认证成功 (管理员: {user_id})</b>\n当前群组: {msg.chat.title}\n该链接有效期 2 小时。", reply_markup=kb)
+            await msg.reply("🔐 权限验证通过，后台链接已私聊发给您。")
+        except:
+            await msg.reply("❌ 请先私聊机器人发送 /start，否则我无法给您发链接。")
 
 @dp.message()
 async def bot_handler(msg: types.Message):
@@ -77,25 +105,15 @@ async def bot_handler(msg: types.Message):
     gid, uid, today = str(msg.chat.id), str(msg.from_user.id), datetime.now().strftime('%Y-%m-%d')
     text = msg.text.strip()
 
-    # 打卡逻辑
+    # 打卡与名单 (对普通用户开放)
     if text == "打卡":
         with get_db() as conn:
             user = conn.execute("SELECT * FROM verified_users WHERE user_id=? AND group_id=?", (uid, gid)).fetchone()
             group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
         
         if not user: return
-        
         if user['expire_date'] and today > user['expire_date']:
             try: await bot.restrict_chat_member(gid, int(uid), permissions=ChatPermissions(can_send_messages=False))
-            except: pass
-            
-            # 私聊提醒
-            try: await bot.send_message(uid, f"⚠️ 您在群 <b>{msg.chat.title}</b> 的授权已到期({user['expire_date']})，已禁言。请联系管理员续费。")
-            except:
-                tmp = await msg.reply("⚠️ 您的授权已到期，请检查私聊或联系管理员。")
-                await asyncio.sleep(5); await bot.delete_message(gid, tmp.message_id)
-            
-            try: await bot.delete_message(gid, msg.message_id)
             except: pass
             return
 
@@ -107,61 +125,52 @@ async def bot_handler(msg: types.Message):
         try: await bot.set_message_reaction(gid, msg.message_id, [types.ReactionTypeEmoji(emoji=group['like_emoji'])])
         except: pass
 
-    # 名单逻辑
-    elif text in ["今日榨汁", "名单", "在线"]:
+    elif text in ["名单", "在线", "今日榨汁"]:
         with get_db() as conn:
             group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
             rows = conn.execute('''SELECT v.* FROM verified_users v JOIN checkins c ON v.user_id = c.user_id 
                                 AND v.group_id = c.group_id WHERE v.group_id=? AND c.checkin_date=?''', (gid, today)).fetchall()
-        if not rows: return await msg.answer("📅 今日暂无老师打卡")
-        res = f"<b>🍹 今日榨汁名单 ({today})</b>\n\n"
+        if not rows: return await msg.answer("📅 今日暂无打卡数据。")
+        res = f"<b>🍹 今日在线名单 ({today})</b>\n\n"
         for r in rows: res += power_render(group['list_template'], r['data_json'], r['name']) + "\n"
         await msg.answer(res, disable_web_page_preview=True)
 
-# --- 定时任务轮询 ---
+# --- 5. 定时任务 ---
 async def timer_worker():
     while True:
-        now = datetime.now()
-        now_s = now.strftime('%Y-%m-%d %H:%M')
+        now_ts = time.time()
+        now_s = datetime.now().strftime('%H:%M')
         with get_db() as conn:
             tasks = conn.execute("SELECT * FROM timers WHERE status=1").fetchall()
             for t in tasks:
-                if t['start_time'] and now_s < t['start_time']: continue
-                if t['end_time'] and now_s > t['end_time']: continue
+                # 检查时间段 (例如 09:00 - 23:00)
+                if t['start_time'] and t['end_time']:
+                    if not (t['start_time'] <= now_s <= t['end_time']): continue
                 
-                run = False
-                if not t['last_run']: run = True
-                else:
-                    last = datetime.strptime(t['last_run'], '%Y-%m-%d %H:%M:%S')
-                    if (now - last).total_seconds() >= t['interval_hours'] * 3600: run = True
-                
-                if run:
+                last_run = float(t['last_run'] or 0)
+                if now_ts - last_run >= int(t['interval_hours']) * 3600:
                     try:
-                        if t['delete_last'] and t['last_msg_id']:
+                        if int(t['delete_last'] or 0) == 1 and t['last_msg_id']:
                             try: await bot.delete_message(t['group_id'], t['last_msg_id'])
                             except: pass
-                        
-                        txt = power_render(t['content'], "{}", "")
-                        m = await bot.send_message(t['group_id'], txt) # 这里可扩展图片视频
-                        conn.execute("UPDATE timers SET last_run=?, last_msg_id=? WHERE id=?", (now.strftime('%Y-%m-%d %H:%M:%S'), m.message_id, t['id']))
+                        m = await bot.send_message(t['group_id'], power_render(t['content'], "{}", ""))
+                        conn.execute("UPDATE timers SET last_run=?, last_msg_id=? WHERE id=?", (now_ts, m.message_id, t['id']))
                         conn.commit()
                     except: pass
         await asyncio.sleep(60)
 
-# --- Web 路由 ---
+# --- 6. Web 后台接口 ---
 @app.get("/manage", response_class=HTMLResponse)
 async def admin_page(request: Request, sid: str, gid: str):
-    if sid not in auth_sessions: return "Session Expired"
+    if sid not in auth_sessions or auth_sessions[sid]["gid"] != gid:
+        return "🚫 只有指定的机器人管理员可以访问"
     with get_db() as conn:
         group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
-        if not group:
-            conn.execute("INSERT INTO groups (group_id) VALUES (?)", (gid,))
-            conn.commit()
-            group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
         timers = [dict(r) for r in conn.execute("SELECT * FROM timers WHERE group_id=?", (gid,)).fetchall()]
         users = [dict(r) for r in conn.execute("SELECT * FROM verified_users WHERE group_id=?", (gid,)).fetchall()]
     return templates.TemplateResponse("manage.html", {"request": request, "sid": sid, "gid": gid, "group": group, "timers": timers, "users": users, "today": datetime.now().strftime('%Y-%m-%d')})
 
+# (API 保存逻辑同前，不再赘述，保持完整)
 @app.post("/api/save")
 async def api_save(sid:str=Form(...), gid:str=Form(...), list_t:str=Form(...), check_t:str=Form(...), fields:str=Form(...), emoji:str=Form(...)):
     with get_db() as conn:
@@ -173,22 +182,16 @@ async def api_save(sid:str=Form(...), gid:str=Form(...), list_t:str=Form(...), c
 async def api_user(sid:str=Form(...), gid:str=Form(...), user_id:str=Form(...), name:str=Form(...), data:str=Form(...), expire:str=Form(None), action:str=Form(...)):
     with get_db() as conn:
         if action == "del": conn.execute("DELETE FROM verified_users WHERE user_id=? AND group_id=?", (user_id, gid))
-        else: conn.execute("INSERT OR REPLACE INTO verified_users VALUES (?,?,?,?,?)", (user_id, gid, name, data, expire))
+        else: conn.execute("INSERT OR REPLACE INTO verified_users (user_id, group_id, name, data_json, expire_date) VALUES (?,?,?,?,?)", (user_id, gid, name, data, expire))
         conn.commit()
     return RedirectResponse(f"/manage?sid={sid}&gid={gid}", status_code=303)
 
 @app.post("/api/timer")
 async def api_timer(sid:str=Form(...), gid:str=Form(...), action:str=Form(...), tid:int=Form(None), remark:str=Form(None), content:str=Form(None), hours:int=Form(1), start:str=Form(None), end:str=Form(None), delete_last:int=Form(0)):
-    # 转换 datetime-local 的 T 分隔符
-    start = start.replace('T', ' ') if start else None
-    end = end.replace('T', ' ') if end else None
     with get_db() as conn:
-        if action == "add":
-            conn.execute("INSERT INTO timers (group_id, remark, content, interval_hours, start_time, end_time, delete_last) VALUES (?,?,?,?,?,?,?)", (gid, remark, content, hours, start, end, delete_last))
-        elif action == "edit":
-            conn.execute("UPDATE timers SET remark=?, content=?, interval_hours=?, start_time=?, end_time=?, delete_last=? WHERE id=?", (remark, content, hours, start, end, delete_last, tid))
-        elif action == "del":
-            conn.execute("DELETE FROM timers WHERE id=?", (tid,))
+        if action == "add": conn.execute("INSERT INTO timers (group_id, remark, content, interval_hours, start_time, end_time, delete_last) VALUES (?,?,?,?,?,?,?)", (gid, remark, content, hours, start, end, delete_last))
+        elif action == "edit": conn.execute("UPDATE timers SET remark=?, content=?, interval_hours=?, start_time=?, end_time=?, delete_last=? WHERE id=?", (remark, content, hours, start, end, delete_last, tid))
+        elif action == "del": conn.execute("DELETE FROM timers WHERE id=?", (tid,))
         conn.commit()
     return RedirectResponse(f"/manage?sid={sid}&gid={gid}", status_code=303)
 
