@@ -9,9 +9,11 @@ from aiogram.client.default import DefaultBotProperties
 
 # --- 基础配置 ---
 TOKEN = os.getenv("BOT_TOKEN")
+# 自动识别 Railway 提供的静态 URL
 DOMAIN = os.getenv("RAILWAY_STATIC_URL", "localhost:8080").rstrip('/')
 if not DOMAIN.startswith('http'): DOMAIN = f"https://{DOMAIN}"
 
+# 数据库存储路径 (Railway Volume 挂载点)
 DB_PATH = "/data/bot.db"
 os.makedirs("/data", exist_ok=True)
 
@@ -46,27 +48,32 @@ def init_db():
             last_run TEXT, status INTEGER DEFAULT 1)''')
         conn.commit()
 
-# --- 占位符渲染解析 ---
+# --- 占位符解析渲染 ---
 def power_render(template, data_json, name):
     try: data = json.loads(data_json or "{}")
     except: data = {}
     data.update({"姓名": name, "onlineEmoji": "✅"})
+    
+    # 转换富文本标签
     text = template.replace('</p>', '\n').replace('<p>', '').replace('<br>', '\n')
+    
     def replace_match(match):
         key = match.group(1).replace('Value', '')
         return str(data.get(key, match.group(0)))
+    
     final_text = re.sub(r'\{(\w+)\}', replace_match, text)
+    # 仅允许 TG 支持的标签
     return re.sub(r'<(?!b|i|u|code|a|s|strong|em)[^>]+>', '', final_text).strip()
 
-# --- 机器人指令 ---
+# --- 机器人逻辑 ---
 @dp.message(Command("start"))
 async def cmd_start(msg: types.Message):
     sid = str(uuid.uuid4())
     auth_sessions[sid] = {"gid": str(msg.chat.id), "exp": time.time() + 3600}
     kb = types.InlineKeyboardMarkup(inline_keyboard=[[
-        types.InlineKeyboardButton(text="🔐 进入管理后台", url=f"{DOMAIN}/manage?sid={sid}&gid={msg.chat.id}")
+        types.InlineKeyboardButton(text="🔐 进入后台管理", url=f"{DOMAIN}/manage?sid={sid}&gid={msg.chat.id}")
     ]])
-    await msg.answer(f"👤 UID: <code>{msg.from_user.id}</code>\n点击登录后台：", reply_markup=kb)
+    await msg.answer(f"👤 UID: <code>{msg.from_user.id}</code>\n请点击下方按钮管理当前群组：", reply_markup=kb)
 
 @dp.message()
 async def bot_handler(msg: types.Message):
@@ -75,7 +82,10 @@ async def bot_handler(msg: types.Message):
     with get_db() as conn:
         group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
         user = conn.execute("SELECT * FROM verified_users WHERE user_id=? AND group_id=?", (uid, gid)).fetchone()
+    
     if not group: return
+
+    # 1. 认证打卡
     if "打卡" in msg.text and user:
         with get_db() as conn:
             conn.execute("INSERT OR IGNORE INTO checkins VALUES (?,?,?)", (uid, gid, today))
@@ -83,15 +93,18 @@ async def bot_handler(msg: types.Message):
         await msg.reply(power_render(group['checkin_template'], user['data_json'], user['name']))
         try: await bot.set_message_reaction(gid, msg.message_id, [types.ReactionTypeEmoji(emoji=group['like_emoji'])])
         except: pass
+    
+    # 2. 名单查询
     elif any(k in msg.text for k in ["名单", "在线"]):
         with get_db() as conn:
             rows = conn.execute('''SELECT v.* FROM verified_users v JOIN checkins c ON v.user_id = c.user_id 
                                 AND v.group_id = c.group_id WHERE v.group_id=? AND c.checkin_date=?''', (gid, today)).fetchall()
         if not rows: return await msg.answer("📅 暂时无人打卡上线")
-        res = f"<b>📅 今日在线名单</b>\n\n"
+        res = f"<b>📅 今日在线名单 ({today})</b>\n\n"
         for r in rows: res += power_render(group['list_template'], r['data_json'], r['name']) + "\n"
         await msg.answer(res, disable_web_page_preview=True)
 
+# --- 定时任务守护进程 ---
 async def timer_worker():
     while True:
         now_dt = datetime.now()
@@ -105,25 +118,31 @@ async def timer_worker():
                 else:
                     last = datetime.strptime(t['last_run'], '%Y-%m-%d %H:%M:%S')
                     if (now_dt - last).total_seconds() >= t['interval_hours'] * 3600: run = True
+                
                 if run:
                     try:
                         text = power_render(t['content'], "{}", "")
-                        if t['media_type'] == "图片" and t['media_url']: m = await bot.send_photo(t['group_id'], t['media_url'], caption=text)
-                        elif t['media_type'] == "视频" and t['media_url']: m = await bot.send_video(t['group_id'], t['media_url'], caption=text)
-                        else: m = await bot.send_message(t['group_id'], text)
+                        m = None
+                        if t['media_type'] == "图片" and t['media_url']:
+                            m = await bot.send_photo(t['group_id'], t['media_url'], caption=text)
+                        elif t['media_type'] == "视频" and t['media_url']:
+                            m = await bot.send_video(t['group_id'], t['media_url'], caption=text)
+                        else:
+                            m = await bot.send_message(t['group_id'], text)
+                        
                         if t['is_pin'] and m: await bot.pin_chat_message(t['group_id'], m.message_id)
                         conn.execute("UPDATE timers SET last_run=? WHERE id=?", (now_dt.strftime('%Y-%m-%d %H:%M:%S'), t['id']))
                         conn.commit()
                     except: pass
         await asyncio.sleep(60)
 
-# --- FastAPI 接口 ---
+# --- FastAPI 路由 ---
 @app.get("/manage", response_class=HTMLResponse)
 async def admin_page(request: Request, sid: str, gid: str):
-    if sid not in auth_sessions: return "Session Expired"
+    if sid not in auth_sessions: return "验证过期，请返回 Telegram 重新发送 /start"
     with get_db() as conn:
         group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
-        if not group: 
+        if not group:
             conn.execute("INSERT INTO groups (group_id) VALUES (?)", (gid,))
             conn.commit()
             group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
@@ -149,7 +168,8 @@ async def api_user(sid:str=Form(...), gid:str=Form(...), user_id:str=Form(...), 
 @app.post("/api/timer")
 async def api_timer(sid:str=Form(...), gid:str=Form(...), action:str=Form(...), tid:int=Form(None), remark:str=Form(None), content:str=Form(None), m_type:str=Form(None), m_url:str=Form(None), hours:int=Form(1), start:str=Form(None), end:str=Form(None), is_pin:int=Form(0)):
     with get_db() as conn:
-        if action == "add": conn.execute("INSERT INTO timers (group_id, remark, content, media_type, media_url, interval_hours, start_time, end_time, is_pin) VALUES (?,?,?,?,?,?,?,?,?)", (gid, remark, content, m_type, m_url, hours, start, end, is_pin))
+        if action == "add":
+            conn.execute("INSERT INTO timers (group_id, remark, content, media_type, media_url, interval_hours, start_time, end_time, is_pin) VALUES (?,?,?,?,?,?,?,?,?)", (gid, remark, content, m_type, m_url, hours, start, end, is_pin))
         elif action == "del": conn.execute("DELETE FROM timers WHERE id=?", (tid,))
         conn.commit()
     return RedirectResponse(f"/manage?sid={sid}&gid={gid}", status_code=303)
