@@ -1,8 +1,11 @@
-<div class="card p-3 mb-4">
-    <a href="/manage?sid={{ sid }}" class="btn btn-light w-100 mb-3 fw-bold">返回列表</a>
+<div class="sidebar p-4 d-flex flex-column">
+    <div class="fw-bold fs-5 mb-4 text-primary"><i class="bi bi-cpu-fill me-2"></i>控制中心</div>
     <div class="nav flex-column nav-pills">
-        <a href="/settings?sid={{ sid }}&gid={{ gid }}" class="nav-link active mb-2">基础设置</a>
-        <a href="/tasks?sid={{ sid }}&gid={{ gid }}" class="nav-link mb-2">定时发送</a>
-        <a href="/users?sid={{ sid }}&gid={{ gid }}" class="nav-link">用户认证</a>
+        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=basic" class="nav-link {% if tab=='basic' %}active{% endif %}"><i class="bi bi-gear me-2"></i>基础设置</a>
+        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=checkin" class="nav-link {% if tab=='checkin' %}active{% endif %}"><i class="bi bi-calendar-check me-2"></i>打卡系统</a>
+        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=query" class="nav-link {% if tab=='query' %}active{% endif %}"><i class="bi bi-search me-2"></i>在线查询</a>
+        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=tasks" class="nav-link {% if tab=='tasks' %}active{% endif %}"><i class="bi bi-clock-history me-2"></i>定时任务</a>
+        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=users" class="nav-link {% if tab=='users' %}active{% endif %}"><i class="bi bi-person-badge me-2"></i>认证管理</a>
     </div>
+    <div class="mt-auto"><a href="/manage?sid={{sid}}" class="btn btn-light w-100 rounded-pill">切换群组</a></div>
 </div>
