@@ -6,55 +6,50 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        body { background: #f4f7f6; font-family: system-ui; }
         .sidebar { width: 250px; height: 100vh; position: fixed; background: #212529; color: white; padding: 20px; }
-        .main { margin-left: 250px; padding: 40px; }
-        .nav-link { color: #adb5bd; cursor: pointer; padding: 12px; border-radius: 8px; margin-bottom: 5px; }
-        .nav-link:hover, .nav-link.active { background: #0d6efd; color: white; }
-        .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .main { margin-left: 250px; padding: 40px; background: #f8f9fa; min-height: 100vh; }
+        .nav-link { color: #adb5bd; cursor: pointer; padding: 12px; border-radius: 8px; }
+        .nav-link.active { background: #0d6efd; color: white; }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <h4 class="mb-4">机器人控制台</h4>
-        <nav class="nav flex-column">
+    <div class="sidebar d-flex flex-column">
+        <h4 class="mb-4">机器人控制</h4>
+        <nav class="nav flex-column mb-auto">
             <a class="nav-link active" onclick="showTab('users')"><i class="bi bi-people me-2"></i> 认证管理</a>
             <a class="nav-link" onclick="showTab('config')"><i class="bi bi-gear me-2"></i> 机器人设置</a>
             <hr>
-            <a href="/portal?sid={{sid}}" class="nav-link text-info"><i class="bi bi-arrow-left-circle me-2"></i> 切换群组</a>
+            <a href="/portal?sid={{sid}}" class="nav-link text-info"><i class="bi bi-arrow-left me-2"></i> 切换群组</a>
         </nav>
     </div>
 
     <div class="main">
         <div id="tab-users">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>{{ group.group_name }}</h2>
-                <button class="btn btn-primary shadow-sm" onclick="openAddModal()">+ 添加认证用户</button>
+            <div class="d-flex justify-content-between mb-4">
+                <h3>{{ group.group_name }}</h3>
+                <button class="btn btn-primary" onclick="openAddModal()">+ 新增用户</button>
             </div>
-
             <form class="input-group mb-4" method="get" action="/manage">
                 <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                <input type="text" name="q" class="form-control" placeholder="搜索 UID、名字、地区..." value="{{q}}">
+                <input type="text" name="q" class="form-control" placeholder="搜索内容..." value="{{q}}">
                 <button class="btn btn-dark" type="submit">搜索</button>
             </form>
-
-            <div class="card p-3">
+            <div class="card p-3 border-0 shadow-sm">
                 <table class="table align-middle">
-                    <thead><tr><th>排序</th><th>信息</th><th>资料</th><th>状态</th><th class="text-end">管理</th></tr></thead>
+                    <thead><tr><th>排序</th><th>名字/ID</th><th>到期状态</th><th class="text-end">管理</th></tr></thead>
                     <tbody>
                         {% for u in users %}
                         <tr>
-                            <td><span class="badge bg-light text-dark border">{{ u.sort_order }}</span></td>
+                            <td>{{ u.sort_order }}</td>
                             <td><b>{{ u.name }}</b><br><small class="text-muted">{{ u.user_id }}</small></td>
-                            <td>{{ u.area }} / {{ u.price }} / {{ u.chest_size }}</td>
                             <td>
                                 {% if u.expire_at == 0 %}<span class="badge bg-success">永久</span>
-                                {% elif u.expire_at < now %}<span class="badge bg-danger">已过期禁言</span>
-                                {% else %}<span class="badge bg-primary">剩 {{ ((u.expire_at-now)//86400)+1 }} 天</span>{% endif %}
+                                {% elif u.expire_at < now %}<span class="badge bg-danger">已过期</span>
+                                {% else %}<span class="badge bg-primary">{{ ((u.expire_at-now)//86400)+1 }}天后过期</span>{% endif %}
                             </td>
                             <td class="text-end">
-                                <button class="btn btn-sm btn-outline-primary" onclick="editUser('{{u.user_id}}','{{u.name}}','{{u.area}}','{{u.price}}','{{u.chest_size}}','{{u.sort_order}}')">编辑</button>
-                                <form action="/api/delete_user" method="post" class="d-inline" onsubmit="return confirm('确定删除此用户？')">
+                                <button class="btn btn-sm btn-outline-primary" onclick='editUser("{{u.user_id}}","{{u.name}}","{{u.sort_order}}",{{ u.data_json|safe }})'>编辑</button>
+                                <form action="/api/delete_user" method="post" class="d-inline" onsubmit="return confirm('确定删除？')">
                                     <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="user_id" value="{{u.user_id}}">
                                     <button class="btn btn-sm btn-outline-danger">删除</button>
                                 </form>
@@ -67,20 +62,14 @@
         </div>
 
         <div id="tab-config" style="display:none">
-            <h2 class="mb-4">群组机器人设置</h2>
-            <div class="card p-4">
+            <h3>机器人全局配置</h3>
+            <div class="card p-4 border-0 shadow-sm">
                 <form action="/api/save_config" method="post">
                     <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">1. 自动点赞表情</label>
-                        <input type="text" name="like_emoji" class="form-control w-25" value="{{ group.like_emoji }}">
-                    </div>
-                    <div class="mb-4">
-                        <label class="form-label fw-bold">2. 今日榨汁模板</label>
-                        <textarea name="list_template" class="form-control" rows="3">{{ group.list_template }}</textarea>
-                        <div class="form-text small">可用占位符：{name} {area} {price} {chest}</div>
-                    </div>
-                    <button class="btn btn-success px-5 shadow">保存所有配置</button>
+                    <div class="mb-3"><label class="form-label fw-bold">1. 字段定义 (逗号隔开)</label><input type="text" name="custom_fields" class="form-control" value="{{ group.custom_fields }}"></div>
+                    <div class="mb-3"><label class="form-label fw-bold">2. 点赞表情</label><input type="text" name="like_emoji" class="form-control w-25" value="{{ group.like_emoji }}"></div>
+                    <div class="mb-3"><label class="form-label fw-bold">3. 名单模板 (占位符: {name} 以及上方定义的字段)</label><textarea name="list_template" class="form-control" rows="4">{{ group.list_template }}</textarea></div>
+                    <button class="btn btn-success">保存配置</button>
                 </form>
             </div>
         </div>
@@ -88,28 +77,21 @@
 
     <div class="modal fade" id="userModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
-            <form class="modal-content" action="/api/save_user" method="post">
+            <form class="modal-content" action="/api/save_user" method="post" id="userForm">
                 <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                <div class="modal-header"><h5>用户信息设置</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-header"><h5>用户设置</h5></div>
                 <div class="modal-body row g-3">
-                    <div class="col-12"><label class="form-label small">Telegram UID</label><input type="number" name="user_id" id="f_id" class="form-control" required></div>
-                    <div class="col-md-6"><label class="form-label small">名字</label><input type="text" name="name" id="f_name" class="form-control" required></div>
-                    <div class="col-md-6"><label class="form-label small">地区</label><input type="text" name="area" id="f_area" class="form-control"></div>
-                    <div class="col-md-4"><label class="form-label small">价格</label><input type="text" name="price" id="f_price" class="form-control"></div>
-                    <div class="col-md-4"><label class="form-label small">身材</label><input type="text" name="chest" id="f_chest" class="form-control"></div>
-                    <div class="col-md-4"><label class="form-label small">排序</label><input type="number" name="sort" id="f_sort" class="form-control" value="0"></div>
-                    <div class="col-12">
-                        <label class="form-label small fw-bold">设置有效期 (天)</label>
-                        <select name="days" class="form-select border-primary bg-light">
-                            <option value="0">永久 (不限制)</option>
-                            <option value="1">1 天 (试用)</option>
-                            <option value="7">7 天 (周费)</option>
-                            <option value="30">30 天 (月费)</option>
-                            <option value="365">365 天 (年费)</option>
-                        </select>
+                    <div class="col-12"><label>UID</label><input type="number" name="user_id" id="f_id" class="form-control" required></div>
+                    <div class="col-12"><label>名字</label><input type="text" name="name" id="f_name" class="form-control" required></div>
+                    <div id="dynamic-area" class="row g-3 m-0 p-0">
+                        {% for f in group.custom_fields.split(',') %}
+                        <div class="col-md-6"><label>{{f}}</label><input type="text" name="{{f}}" class="form-control dyn-input" data-key="{{f}}"></div>
+                        {% endfor %}
                     </div>
+                    <div class="col-md-6"><label>权重</label><input type="number" name="sort" id="f_sort" class="form-control" value="0"></div>
+                    <div class="col-md-6"><label>天数</label><input type="number" name="days" class="form-control" value="30"></div>
                 </div>
-                <div class="modal-footer"><button type="submit" class="btn btn-primary w-100">保存并更新权限</button></div>
+                <div class="modal-footer"><button class="btn btn-primary w-100">保存设置</button></div>
             </form>
         </div>
     </div>
@@ -117,20 +99,16 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const modal = new bootstrap.Modal(document.getElementById('userModal'));
-        function showTab(t) {
-            document.getElementById('tab-users').style.display = t==='users'?'block':'none';
-            document.getElementById('tab-config').style.display = t==='config'?'block':'none';
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l.innerText.includes(t==='users'?'认证':'设置')));
+        function showTab(t){
+            document.getElementById('tab-users').style.display=t==='users'?'block':'none';
+            document.getElementById('tab-config').style.display=t==='config'?'block':'none';
         }
-        function openAddModal() {
-            document.getElementById('f_id').value=''; document.getElementById('f_id').readOnly=false;
-            modal.show();
-        }
-        function editUser(id, n, a, p, c, s) {
+        function openAddModal(){ document.getElementById('userForm').reset(); document.getElementById('f_id').readOnly=false; modal.show(); }
+        function editUser(id, n, s, data){
             document.getElementById('f_id').value=id; document.getElementById('f_id').readOnly=true;
-            document.getElementById('f_name').value=n; document.getElementById('f_area').value=a;
-            document.getElementById('f_price').value=p; document.getElementById('f_chest').value=c;
-            document.getElementById('f_sort').value=s; modal.show();
+            document.getElementById('f_name').value=n; document.getElementById('f_sort').value=s;
+            document.querySelectorAll('.dyn-input').forEach(i => { i.value = data[i.dataset.key] || ''; });
+            modal.show();
         }
     </script>
 </body>
