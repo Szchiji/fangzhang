@@ -1,5 +1,5 @@
 fastapi
 uvicorn
-aiogram==3.13.1
+aiogram>=3.0.0
 jinja2
 python-multipart
