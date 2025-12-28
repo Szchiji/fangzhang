@@ -1,14 +1,125 @@
-<button type="button" onclick="ajaxSubmit('taskForm', '/api/add_task')" class="btn btn-primary">
-    立即启动计划
-</button>
+{% extends "layout.html" %}
+{% block content %}
+<div class="card p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h5 class="fw-bold m-0"><i class="bi bi-alarm me-2 text-primary"></i>定时任务管理</h5>
+            <small class="text-muted">设置群组自动广播消息，支持定时撤回以保持群洁净</small>
+        </div>
+        <button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#taskModal">
+            <i class="bi bi-plus-lg me-1"></i> 新建计划
+        </button>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="bg-light">
+                <tr class="small text-muted">
+                    <th>任务备注</th><th>发送频率</th><th>自动撤回</th><th>状态</th><th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tasks %}
+                <tr id="task-row-{{t[0]}}">
+                    <td class="fw-bold">{{ t[8] or '未命名任务' }}</td>
+                    <td><span class="badge bg-info-soft text-info">{{ t[6] }}</span></td>
+                    <td>{{ t[7] if t[7] != '0' else '永不撤回' }}</td>
+                    <td><span class="badge bg-success-soft text-success">● 队列中</span></td>
+                    <td>
+                        <button class="btn btn-link text-danger p-0" onclick="deleteTask('{{t[0]}}')">删除</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="taskModal" tabindex="-1">
+    <form id="taskForm" class="modal-dialog modal-lg border-0">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold">创建定时广播计划</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="sid" value="{{sid}}">
+                <input type="hidden" name="gid" value="{{gid}}">
+                
+                <div class="mb-3">
+                    <label class="small fw-bold text-muted mb-2">任务备注</label>
+                    <input type="text" name="remark" class="form-control" placeholder="例如：每日午间推广" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="small fw-bold text-muted mb-2">广播内容 (支持富文本链接)</label>
+                    <div id="editor" style="height: 200px; background: #fff;"></div>
+                    <input type="hidden" name="content_html" id="content_html">
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="small fw-bold text-muted mb-2">发送频率</label>
+                        <select name="cron" class="form-select">
+                            <option value="30">每 30 分钟</option>
+                            <option value="60">每 1 小时</option>
+                            <option value="180">每 3 小时</option>
+                            <option value="1440">每天一次</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="small fw-bold text-muted mb-2">自动撤回 (秒)</label>
+                        <input type="number" name="delete_after" class="form-control" placeholder="0 为不撤回" value="300">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" onclick="submitTask()" class="btn btn-primary w-100 rounded-pill py-2">
+                    <i class="bi bi-rocket-takeoff me-2"></i>立即加入执行序列
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
 
 <script>
-// 只要这个函数在 layout.html 里，所有页面都能用
-async function ajaxSubmit(formId, url) {
-    const fd = new FormData(document.getElementById(formId));
-    const res = await fetch(url, { method: 'POST', body: fd });
-    if(res.ok) {
-        showToast("✅ 操作已同步到机器人");
+    // 初始化编辑器
+    var quill = new Quill('#editor', {
+        theme: 'snow',
+        placeholder: '在此输入要推送的消息内容...',
+        modules: { toolbar: [['bold', 'italic', 'link'], [{'color': []}]] }
+    });
+
+    // AJAX 提交任务
+    async function submitTask() {
+        const html = quill.root.innerHTML;
+        document.getElementById('content_html').value = html;
+        
+        const fd = new FormData(document.getElementById('taskForm'));
+        const res = await fetch('/api/add_task', { method: 'POST', body: fd });
+        
+        if (res.ok) {
+            showToast("🚀 定时计划已启动！");
+            bootstrap.Modal.getInstance(document.getElementById('taskModal')).hide();
+            setTimeout(() => location.reload(), 1000); // 刷新查看新任务
+        }
     }
-}
+
+    async function deleteTask(tid) {
+        if(!confirm('确定取消此定时任务吗？')) return;
+        const fd = new FormData();
+        fd.append('tid', tid); fd.append('sid', '{{sid}}');
+        const res = await fetch('/api/del_task', { method: 'POST', body: fd });
+        if(res.ok) {
+            showToast("🗑️ 任务已移除");
+            document.getElementById(`task-row-${tid}`).remove();
+        }
+    }
 </script>
+<style>
+    .bg-info-soft { background: #e0f2fe; color: #0369a1; }
+    .bg-success-soft { background: #dcfce7; color: #15803d; }
+    .ql-toolbar.ql-snow { border-top-left-radius: 8px; border-top-right-radius: 8px; border-color: #e2e8f0; }
+    .ql-container.ql-snow { border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; border-color: #e2e8f0; }
+</style>
+{% endblock %}
