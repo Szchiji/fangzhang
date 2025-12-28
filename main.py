@@ -4,7 +4,7 @@ import uvicorn
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
 
-# --- 极简配置 ---
+# --- 配置 ---
 TOKEN = os.getenv("TOKEN")
 PORT = int(os.getenv("PORT", 8080))
 
@@ -12,32 +12,42 @@ app = FastAPI()
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 
-# --- 强制打印所有收到的消息 ---
+# --- 消息处理 ---
 @dp.message()
 async def echo_handler(msg: types.Message):
-    print(f"!!! [重大进展] 收到消息: {msg.text} 来自: {msg.from_user.id}")
-    await msg.answer(f"机器人已收到消息！你的 ID 是: {msg.from_user.id}")
+    # 只要收到消息，日志一定会跳出这一行
+    print(f"!!! 成功收到消息: {msg.text} 来自: {msg.from_user.id}")
+    await msg.answer(f"收到！你的 ID 是: {msg.from_user.id}")
 
 @app.get("/")
 async def health():
-    return {"status": "ok", "info": "bot server is alive"}
+    return {"status": "ok", "message": "Bot is running"}
 
-# --- 核心修复：手动管理循环 ---
-async def start_bot():
+# --- 核心启动逻辑：彻底解决阻塞 ---
+async def run_services():
+    # 1. 强制清理 Webhook
     await bot.delete_webhook(drop_pending_updates=True)
-    me = await bot.get_me()
-    print(f"*** 机器人已在线: @{me.username} ***")
-    await dp.start_polling(bot)
+    
+    # 2. 验证机器人身份
+    try:
+        me = await bot.get_me()
+        print(f"--- 机器人验证成功: @{me.username} ---")
+    except Exception as e:
+        print(f"--- 机器人连接失败: {e} ---")
+        return
 
-async def start_web():
+    # 3. 配置 Web 服务器
+    # 注意：我们手动在 loop 中运行 uvicorn
     config = uvicorn.Config(app, host="0.0.0.0", port=PORT, loop="asyncio")
     server = uvicorn.Server(config)
-    await server.serve()
 
-async def run_all():
-    # 使用 gather 同时启动，互不阻塞
-    print("正在并行启动 Bot 和 Web...")
-    await asyncio.gather(start_bot(), start_web())
+    # 4. 并行启动：这会让 Bot 和 Web 同时在后台运行
+    print("--- 正在启动并行链路 ---")
+    await asyncio.gather(
+        dp.start_polling(bot),
+        server.serve()
+    )
 
 if __name__ == "__main__":
-    asyncio.run(run_all())
+    # 直接运行并发主函数
+    asyncio.run(run_services())
