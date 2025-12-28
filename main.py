@@ -1,53 +1,43 @@
 import os, asyncio, sqlite3, uuid, logging, time, json, re
 from datetime import datetime
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import ReactionTypeEmoji
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import ReactionTypeEmoji, InlineKeyboardMarkup, InlineKeyboardButton
 import uvicorn
 
-# --- 基础配置 ---
+# --- 配置 ---
 TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 DOMAIN = os.getenv("RAILWAY_STATIC_URL", "localhost:8080").rstrip('/')
 if not DOMAIN.startswith('http'): DOMAIN = f"https://{DOMAIN}"
-
 DB_PATH = "/data/bot.db"
 os.makedirs("/data", exist_ok=True)
 logging.basicConfig(level=logging.INFO)
 
-# --- 核心渲染引擎：处理占位符与 HTML 清理 ---
-def safe_format(template, data):
-    # 构建带 Value 后缀的字典
-    render_data = {f"{k}Value": v for k, v in data.items()}
-    render_data["onlineEmoji"] = data.get("onlineEmoji", "✅")
-    render_data["老师名字Value"] = data.get("name", "")
-    
-    # 清理原生编辑器 HTML 标签，确保 Telegram 兼容
-    # 将 <div> 替换为换行，清理多余转义
-    template = template.replace('&nbsp;', ' ').replace('&amp;', '&')
-    template = template.replace('<div>', '').replace('</div>', '\n').replace('<br>', '\n').replace('<p>', '').replace('</p>', '\n')
-    
-    def replace(match):
-        key = match.group(1)
-        return str(render_data.get(key, ""))
-        
-    return re.sub(r'\{(\w+)\}', replace, template).strip()
+auth_sessions = {}
 
-def json_loads_filter(value):
-    try: return json.loads(value) if value else {}
-    except: return {}
+# --- 万能渲染引擎 ---
+def power_render(template, data_json, name):
+    try: data = json.loads(data_json)
+    except: data = {}
+    # 合并内置变量
+    data.update({"姓名": name, "onlineEmoji": "✅", "老师名字": name})
+    # 清理编辑器生成的 HTML 标签并处理换行
+    t = template.replace('<div>', '').replace('</div>', '\n').replace('<br>', '\n').replace('&nbsp;', ' ')
+    # 替换 {字段Value} 或 {字段}
+    def repl(m):
+        key = m.group(1).replace('Value', '')
+        return str(data.get(key, m.group(0)))
+    return re.sub(r'\{(\w+)\}', repl, t).strip()
 
 # --- 初始化组件 ---
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
-templates.env.filters["json_loads"] = json_loads_filter
 
 def get_db():
     conn = sqlite3.connect(DB_PATH); conn.row_factory = sqlite3.Row
@@ -55,76 +45,84 @@ def get_db():
 
 def init_db():
     with get_db() as conn:
-        # 核心数据库表结构
         conn.execute('''CREATE TABLE IF NOT EXISTS groups (
-            group_id TEXT PRIMARY KEY, group_name TEXT, 
-            like_emoji TEXT DEFAULT '👍', 
-            list_template TEXT DEFAULT '{onlineEmoji} {地区Value} <a href="{联系方式Value}">{老师名字Value}</a>',
-            checkin_template TEXT DEFAULT '✅ 【{老师名字Value}】上线成功！',
-            custom_fields TEXT DEFAULT '地区,价位,联系方式')''')
+            group_id TEXT PRIMARY KEY, like_emoji TEXT DEFAULT '👍',
+            custom_fields TEXT DEFAULT '地区,价格,联系链接',
+            list_template TEXT DEFAULT '{onlineEmoji} <b>[{地区Value}]</b> {姓名Value} - {价格Value}',
+            checkin_template TEXT DEFAULT '✨ {姓名Value} 已上线！')''')
         conn.execute('''CREATE TABLE IF NOT EXISTS verified_users (
-            user_id TEXT, group_id TEXT, name TEXT, 
-            sort_order INTEGER DEFAULT 0, expire_at INTEGER DEFAULT 0,
-            data_json TEXT DEFAULT "{}", PRIMARY KEY(user_id, group_id))''')
+            user_id TEXT, group_id TEXT, name TEXT, data_json TEXT, PRIMARY KEY(user_id, group_id))''')
         conn.execute('''CREATE TABLE IF NOT EXISTS checkins (
-            user_id TEXT, group_id TEXT, checkin_date TEXT, 
-            PRIMARY KEY(user_id, group_id, checkin_date))''')
+            user_id TEXT, group_id TEXT, checkin_date TEXT, PRIMARY KEY(user_id, group_id, checkin_date))''')
         conn.commit()
 
-# --- 机器人逻辑 ---
-@dp.message(F.chat.type.in_({"group", "supergroup"}))
-async def group_handler(msg: types.Message):
+# --- 机器人核心处理逻辑 ---
+@dp.message(Command("start"))
+async def cmd_start(msg: types.Message):
+    sid = str(uuid.uuid4())
+    auth_sessions[sid] = {"gid": str(msg.chat.id), "exp": time.time() + 3600}
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔐 登录全能后台", url=f"{DOMAIN}/manage?sid={sid}&gid={msg.chat.id}")]])
+    await msg.answer(f"👤 <b>您的 UID:</b> <code>{msg.from_user.id}</code>\n\n请点击下方按钮管理当前群聊配置：", reply_markup=kb)
+
+@dp.message()
+async def universal_handler(msg: types.Message):
+    if not msg.text: return
     gid, uid, today = str(msg.chat.id), str(msg.from_user.id), datetime.now().strftime('%Y-%m-%d')
+    
     with get_db() as conn:
         group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
         if not group:
-            conn.execute("INSERT INTO groups (group_id, group_name) VALUES (?,?)", (gid, msg.chat.title))
-            conn.commit()
+            conn.execute("INSERT INTO groups (group_id) VALUES (?)", (gid,)); conn.commit()
             group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
         user = conn.execute("SELECT * FROM verified_users WHERE user_id=? AND group_id=?", (uid, gid)).fetchone()
 
     # 1. 自动点赞
-    if user and msg.text not in ["打卡", "今日名单", "今日榨汁"]:
-        if user['expire_at'] == 0 or user['expire_at'] > time.time():
-            try: await msg.react([ReactionTypeEmoji(emoji=group['like_emoji'] or "👍")])
-            except: pass
+    if user and not any(k in msg.text for k in ["打卡", "名单"]):
+        try: await msg.react([ReactionTypeEmoji(emoji=group['like_emoji'])])
+        except: pass
 
-    # 2. 老师打卡 (自定义回复模板)
-    if msg.text == "打卡" and user:
+    # 2. 智能打卡逻辑 (带交互按钮)
+    if "打卡" in msg.text and user:
         with get_db() as conn:
-            conn.execute("INSERT OR IGNORE INTO checkins VALUES (?,?,?)", (uid, gid, today))
-            conn.commit()
-        attr = json.loads(user['data_json']); attr['name'] = user['name']
-        welcome_text = safe_format(group['checkin_template'], attr)
-        await msg.reply(welcome_text)
+            conn.execute("INSERT OR IGNORE INTO checkins VALUES (?,?,?)", (uid, gid, today)); conn.commit()
+        data = json.loads(user['data_json'])
+        kb = None
+        if "联系链接" in data and data["联系链接"].startswith("http"):
+            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"💬 联系 {user['name']}", url=data['联系链接'])]])
+        await msg.reply(power_render(group['checkin_template'], user['data_json'], user['name']), reply_markup=kb)
 
-    # 3. 今日名单展示 (支持超链接跳转)
-    if msg.text in ["今日名单", "今日榨汁"]:
+    # 3. 名单展示
+    elif any(k in msg.text for k in ["名单", "今日", "在线"]):
         with get_db() as conn:
-            users = conn.execute('''SELECT v.* FROM verified_users v JOIN checkins c ON v.user_id = c.user_id 
-                                 AND v.group_id = c.group_id WHERE v.group_id=? AND c.checkin_date=? 
-                                 ORDER BY v.sort_order DESC''', (gid, today)).fetchall()
-        if not users: return await msg.answer("📅 暂时没有在线老师。")
-        
+            rows = conn.execute('''SELECT v.* FROM verified_users v JOIN checkins c ON v.user_id = c.user_id 
+                                AND v.group_id = c.group_id WHERE v.group_id=? AND c.checkin_date=?''', (gid, today)).fetchall()
+        if not rows: return await msg.answer("📅 暂时无人上线")
         res = f"<b>📅 {msg.chat.title} 在线名单</b>\n\n"
-        for u in users:
-            attr = json.loads(u['data_json']); attr['name'] = u['name']
-            res += safe_format(group['list_template'], attr) + "\n"
+        for r in rows:
+            res += power_render(group['list_template'], r['data_json'], r['name']) + "\n"
         await msg.answer(res, disable_web_page_preview=True)
 
-# --- 后台接口 (仅保留核心逻辑) ---
+# --- Web 后台接口 ---
 @app.get("/manage", response_class=HTMLResponse)
-async def manage(request: Request, sid: str, gid: str):
-    # 这里应有鉴权逻辑
+async def admin_page(request: Request, sid: str, gid: str):
+    if sid not in auth_sessions or auth_sessions[sid]['exp'] < time.time(): return "验证已过期，请回机器人处重新发送 /start"
     with get_db() as conn:
         group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
-        users = conn.execute("SELECT * FROM verified_users WHERE group_id=? ORDER BY sort_order DESC", (gid,)).fetchall()
-    return templates.TemplateResponse("manage.html", {"request": request, "sid": sid, "gid": gid, "group": group, "users": users, "now": int(time.time())})
+        users = conn.execute("SELECT * FROM verified_users WHERE group_id=?", (gid,)).fetchall()
+    return templates.TemplateResponse("manage.html", {"request": request, "sid": sid, "gid": gid, "group": group, "users": users})
 
-@app.post("/api/save_config")
-async def save_config(sid: str=Form(...), gid: str=Form(...), like_emoji: str=Form(...), list_template: str=Form(...), checkin_template: str=Form(...), custom_fields: str=Form(...)):
+@app.post("/api/save")
+async def api_save(sid:str=Form(...), gid:str=Form(...), list_t:str=Form(...), check_t:str=Form(...), fields:str=Form(...), emoji:str=Form(...)):
     with get_db() as conn:
-        conn.execute("UPDATE groups SET like_emoji=?, list_template=?, checkin_template=?, custom_fields=? WHERE group_id=?", (like_emoji, list_template, checkin_template, custom_fields, gid))
+        conn.execute("UPDATE groups SET list_template=?, checkin_template=?, custom_fields=?, like_emoji=? WHERE group_id=?", (list_t, check_t, fields, emoji, gid))
+        conn.commit()
+    return RedirectResponse(f"/manage?sid={sid}&gid={gid}", status_code=303)
+
+@app.post("/api/user")
+async def api_user(sid:str=Form(...), gid:str=Form(...), user_id:str=Form(...), name:str=Form(...), data:str=Form(...), action:str=Form(...)):
+    with get_db() as conn:
+        if action == "del": conn.execute("DELETE FROM verified_users WHERE user_id=? AND group_id=?", (user_id, gid))
+        else: conn.execute("INSERT OR REPLACE INTO verified_users VALUES (?,?,?,?)", (user_id, gid, name, data))
         conn.commit()
     return RedirectResponse(f"/manage?sid={sid}&gid={gid}", status_code=303)
 
