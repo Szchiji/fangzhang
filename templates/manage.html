@@ -2,102 +2,88 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>原生配置后台</title>
+    <title>机器人全能管理后台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .editor-container { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 10px; min-height: 120px; overflow-y: auto; }
-        .editor-container:focus { border-color: #0d6efd; outline: none; }
-        .link-text { color: #0d6efd; text-decoration: underline; font-weight: bold; }
-        .section-card { border: none; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); margin-bottom: 20px; }
+        body { background: #f0f2f5; font-family: system-ui; }
+        .card { border-radius: 12px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .editor-box { min-height: 100px; border: 2px solid #e9ecef; padding: 12px; border-radius: 8px; background: #fff; outline: none; }
+        .editor-box:focus { border-color: #0d6efd; }
+        .btn-tag { font-size: 0.75rem; border-radius: 6px; margin-right: 4px; margin-bottom: 4px; }
     </style>
 </head>
-<body class="bg-light p-4">
-    <div class="container" style="max-width: 850px;">
-        <h4 class="mb-4 text-center">🤖 机器人高级功能配置</h4>
-        
-        <form action="/api/save_config" method="post" onsubmit="syncAll()">
+<body class="py-5">
+    <div class="container" style="max-width: 900px;">
+        <h4 class="mb-4 text-center fw-bold text-primary">🤖 机器人全能配置中心</h4>
+
+        <form action="/api/save" method="post" onsubmit="sync()">
             <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-            
-            <div class="card section-card p-3">
+            <div class="card p-4 mb-4">
+                <h6 class="fw-bold mb-3">1. 基础配置</h6>
                 <div class="row g-3">
-                    <div class="col-md-8">
-                        <label class="form-label fw-bold small text-muted">自定义字段 (用于生成按钮, 逗号隔开)</label>
-                        <input type="text" name="custom_fields" class="form-control" value="{{ group.custom_fields }}">
+                    <div class="col-md-9"><label class="small fw-bold">自定义属性 (用逗号隔开，如：地区,价格,课表,联系链接)</label><input type="text" name="fields" class="form-control" value="{{group.custom_fields}}"></div>
+                    <div class="col-md-3"><label class="small fw-bold">点赞表情</label><input type="text" name="emoji" class="form-control text-center" value="{{group.like_emoji}}"></div>
+                </div>
+            </div>
+
+            <div class="card p-4 mb-4">
+                <h6 class="fw-bold mb-3">2. 消息模板自定义</h6>
+                <div class="mb-4">
+                    <label class="small fw-bold text-success">今日名单样式 (点击按钮插入占位符)</label>
+                    <div class="mb-2">
+                        <button type="button" class="btn btn-dark btn-tag" onclick="ins('ed-list','{姓名Value}')">姓名</button>
+                        {% for f in group.custom_fields.split(',') %}<button type="button" class="btn btn-info btn-tag text-white" onclick="ins('ed-list','{{'{'}}{{f}}Value{{'}'}}')">{{f}}</button>{% endfor %}
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold small text-muted">点赞表情</label>
-                        <input type="text" name="like_emoji" class="form-control" value="{{ group.like_emoji }}">
-                    </div>
+                    <div id="ed-list" class="editor-box" contenteditable="true">{{group.list_template|safe}}</div>
+                    <textarea name="list_t" id="h-list" style="display:none"></textarea>
                 </div>
-            </div>
-
-            <div class="card section-card p-3">
-                <label class="form-label fw-bold text-primary">老师打卡成功回复模板</label>
-                <div class="mb-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="add('ed-checkin','{老师名字Value}')">姓名占位符</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="add('ed-checkin','{地区Value}')">地区占位符</button>
+                <div class="mb-3">
+                    <label class="small fw-bold text-primary">打卡回复成功消息</label>
+                    <div id="ed-check" class="editor-box" contenteditable="true">{{group.checkin_template|safe}}</div>
+                    <textarea name="check_t" id="h-check" style="display:none"></textarea>
                 </div>
-                <div id="ed-checkin" class="editor-container" contenteditable="true">{{ group.checkin_template|safe }}</div>
-                <textarea name="checkin_template" id="hide-checkin" style="display:none"></textarea>
+                <button class="btn btn-primary w-100 py-2 fw-bold">🚀 保存并同步配置</button>
             </div>
-
-            <div class="card section-card p-3">
-                <label class="form-label fw-bold text-success">今日名单展示模板</label>
-                <div class="mb-2 d-flex flex-wrap gap-1">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="add('ed-list','{onlineEmoji}')">在线表情</button>
-                    <button type="button" class="btn btn-sm btn-primary" onclick="openLinkModal()">+ 名字链接</button>
-                    {% for f in group.custom_fields.split(',') %}
-                        {% if f %}<button type="button" class="btn btn-sm btn-outline-info" onclick="add('ed-list','{{'{'}}{{f}}Value{{'}'}}')">{{f}}</button>{% endif %}
-                    {% endfor %}
-                </div>
-                <div id="ed-list" class="editor-container" contenteditable="true">{{ group.list_template|safe }}</div>
-                <textarea name="list_template" id="hide-list" style="display:none"></textarea>
-            </div>
-
-            <button type="submit" class="btn btn-success w-100 py-2 fs-5">🚀 保存所有配置</button>
         </form>
-    </div>
 
-    <div class="modal fade" id="linkModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content p-3 shadow border-0">
-                <div class="modal-header border-0"><h5 class="modal-title">设置超链接占位符</h5></div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="small fw-bold">目标链接 (或变量)</label>
-                        <input type="text" id="l_url" class="form-control" value="{联系方式Value}">
-                    </div>
-                    <div class="mb-3">
-                        <label class="small fw-bold">显示文本 (或变量)</label>
-                        <input type="text" id="l_txt" class="form-control" value="{老师名字Value}">
-                    </div>
-                </div>
-                <div class="modal-footer border-0">
-                    <button class="btn btn-primary w-100" onclick="confirmLink()">确认插入到名单模板</button>
-                </div>
+        <div class="card p-4">
+            <h6 class="fw-bold mb-3">3. 老师名单数据库</h6>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light small"><tr><th>UID (必填)</th><th>姓名</th><th>详细数据 (JSON格式)</th><th>操作</th></tr></thead>
+                    <tbody>
+                        {% for u in users %}
+                        <tr>
+                            <form action="/api/user" method="post">
+                                <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
+                                <input type="hidden" name="action" value="save">
+                                <td><input type="text" name="user_id" class="form-control form-control-sm" value="{{u.user_id}}" readonly></td>
+                                <td><input type="text" name="name" class="form-control form-control-sm" value="{{u.name}}"></td>
+                                <td><input type="text" name="data" class="form-control form-control-sm" value="{{u.data_json}}"></td>
+                                <td><button class="btn btn-sm btn-link text-primary p-0 me-2">更新</button><button name="action" value="del" class="btn btn-sm btn-link text-danger p-0">删除</button></td>
+                            </form>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-primary">
+                            <form action="/api/user" method="post">
+                                <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
+                                <input type="hidden" name="action" value="save">
+                                <td><input type="text" name="user_id" class="form-control form-control-sm" placeholder="UID"></td>
+                                <td><input type="text" name="name" class="form-control form-control-sm" placeholder="老师称呼"></td>
+                                <td><input type="text" name="data" class="form-control form-control-sm" value='{"地区":"北京","价格":"500","联系链接":"https://t.me/xxx"}'></td>
+                                <td><button class="btn btn-sm btn-success">添加老师</button></td>
+                            </form>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const linkModal = new bootstrap.Modal(document.getElementById('linkModal'));
-        function add(id, val) {
-            const ed = document.getElementById(id); ed.focus();
-            document.execCommand('insertHTML', false, `<span>${val}</span> `);
-        }
-        function openLinkModal() { linkModal.show(); }
-        function confirmLink() {
-            const url = document.getElementById('l_url').value;
-            const txt = document.getElementById('l_txt').value;
-            const html = `<a href="${url}" class="link-text">${txt}</a> `;
-            document.getElementById('ed-list').focus();
-            document.execCommand('insertHTML', false, html);
-            linkModal.hide();
-        }
-        function syncAll() {
-            document.getElementById('hide-checkin').value = document.getElementById('ed-checkin').innerHTML;
-            document.getElementById('hide-list').value = document.getElementById('ed-list').innerHTML;
+        function ins(id, t) { const el = document.getElementById(id); el.focus(); document.execCommand('insertHTML', false, t + ' '); }
+        function sync() {
+            document.getElementById('h-list').value = document.getElementById('ed-list').innerHTML;
+            document.getElementById('h-check').value = document.getElementById('ed-check').innerHTML;
         }
     </script>
 </body>
