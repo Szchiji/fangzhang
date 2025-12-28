@@ -1,66 +1,24 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>机器人管理后台</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background: #f4f7f6; display: flex; flex-direction: column; min-height: 100vh; font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-        .sidebar { background: #fff; border-right: 1px solid #ddd; z-index: 100; transition: all 0.3s; }
-        .main { flex: 1; padding: 20px; transition: all 0.3s; }
-        
-        /* 电脑端布局 */
-        @media (min-width: 769px) {
-            body { flex-direction: row; }
-            .sidebar { width: 220px; position: fixed; height: 100vh; }
-            .main { margin-left: 220px; }
-        }
-        /* 手机端布局：核心适配逻辑 */
-        @media (max-width: 768px) {
-            .sidebar { width: 100%; position: sticky; top: 0; height: auto; border-bottom: 1px solid #ddd; padding: 5px 10px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-            .sidebar .nav { flex-direction: row !important; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
-            .sidebar .logo { display: none; }
-            .nav-link { margin: 2px 5px !important; padding: 8px 15px; font-size: 14px; }
-            .main { padding: 15px; }
-            /* 隐藏滚动条但保留功能 */
-            .sidebar .nav::-webkit-scrollbar { display: none; }
-        }
-
-        .nav-link { color: #666; cursor: pointer; border-radius: 10px; margin: 5px 10px; font-weight: 500; display: flex; align-items: center; }
-        .nav-link i { font-size: 1.1rem; }
-        .nav-link.active { background: #0d6efd; color: #fff !important; box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3); }
-        .card { border: none; box-shadow: 0 0.125rem 0.5rem rgba(0,0,0,0.05); border-radius: 15px; }
-        .btn { border-radius: 10px; font-weight: 500; }
+        body { background-color: #f8f9fa; }
+        .main-card { border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 20px; }
+        .btn-custom { border-radius: 8px; }
     </style>
 </head>
 <body>
-    <div class="sidebar d-flex flex-column p-3 shadow-sm">
-        <div class="logo fw-bold text-primary mb-4 px-3 fs-5">
-            <i class="bi bi-shield-check me-2"></i>机器人管理
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1">🤖 机器人管理系统</span>
         </div>
-        <div class="nav flex-column">
-            <div class="nav-link active" onclick="showSec('sec-base', this)"><i class="bi bi-gear me-2"></i>配置</div>
-            <div class="nav-link" onclick="showSec('sec-users', this)"><i class="bi bi-people me-2"></i>名单</div>
-            <div class="nav-link" onclick="showSec('sec-timers', this)"><i class="bi bi-megaphone me-2"></i>定时</div>
-        </div>
+    </nav>
+    <div class="container mt-4">
+        {% block content %}{% endblock %}
     </div>
-    <div class="main">{% block content %}{% endblock %}</div>
-    
-    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // 手机端点击菜单后自动平滑滚动到顶部
-        function showSec(id, el){
-            document.querySelectorAll('section').forEach(s => s.style.display = 'none');
-            document.getElementById(id).style.display = 'block';
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-            el.classList.add('active');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-    </script>
-    {% block extra_js %}{% endblock %}
 </body>
 </html>
