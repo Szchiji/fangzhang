@@ -1,11 +1,36 @@
 <div class="sidebar p-4 d-flex flex-column">
-    <div class="fw-bold fs-5 mb-4 text-primary"><i class="bi bi-cpu-fill me-2"></i>控制中心</div>
-    <div class="nav flex-column nav-pills">
-        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=basic" class="nav-link {% if tab=='basic' %}active{% endif %}"><i class="bi bi-gear me-2"></i>基础设置</a>
-        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=checkin" class="nav-link {% if tab=='checkin' %}active{% endif %}"><i class="bi bi-calendar-check me-2"></i>打卡系统</a>
-        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=query" class="nav-link {% if tab=='query' %}active{% endif %}"><i class="bi bi-search me-2"></i>在线查询</a>
-        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=tasks" class="nav-link {% if tab=='tasks' %}active{% endif %}"><i class="bi bi-clock-history me-2"></i>定时任务</a>
-        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=users" class="nav-link {% if tab=='users' %}active{% endif %}"><i class="bi bi-person-badge me-2"></i>认证管理</a>
+    <div class="d-flex align-items-center mb-4 ps-2">
+        <div class="bg-primary text-white p-2 rounded-3 me-2 shadow-sm">
+            <i class="bi bi-robot fs-5"></i>
+        </div>
+        <h5 class="fw-bold m-0 text-dark">控制中枢</h5>
     </div>
-    <div class="mt-auto"><a href="/manage?sid={{sid}}" class="btn btn-light w-100 rounded-pill">切换群组</a></div>
+
+    <div class="nav flex-column nav-pills">
+        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=basic" class="nav-link {% if tab=='basic' %}active{% endif %}">
+            <i class="bi bi-sliders2-vertical me-2"></i>基础设置
+        </a>
+        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=checkin" class="nav-link {% if tab=='checkin' %}active{% endif %}">
+            <i class="bi bi-calendar-check me-2"></i>打卡系统
+        </a>
+        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=query" class="nav-link {% if tab=='query' %}active{% endif %}">
+            <i class="bi bi-search me-2"></i>在线查询
+        </a>
+        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=tasks" class="nav-link {% if tab=='tasks' %}active{% endif %}">
+            <i class="bi bi-clock-history me-2"></i>定时任务
+        </a>
+        <a href="/manage?sid={{sid}}&gid={{gid}}&tab=users" class="nav-link {% if tab=='users' %}active{% endif %}">
+            <i class="bi bi-people me-2"></i>认证管理
+        </a>
+    </div>
+
+    <div class="mt-auto">
+        <hr class="opacity-10 mb-4">
+        <a href="/manage?sid={{sid}}" class="btn btn-light w-100 rounded-pill d-flex align-items-center justify-content-center py-2">
+            <i class="bi bi-arrow-left-circle me-2"></i>切换群组
+        </a>
+        <div class="text-center mt-3">
+            <small class="text-muted small-text">Powered by Gemini Bot</small>
+        </div>
+    </div>
 </div>
