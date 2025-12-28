@@ -1,76 +1,47 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="card-custom">
-    <div class="d-flex align-items-center mb-4">
-        <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-3"><i class="bi bi-chat-square-dots text-primary fs-4"></i></div>
-        <h5 class="fw-bold m-0">查询指令与模板配置</h5>
-    </div>
-
+    <h5 class="fw-bold mb-4">回复模板配置 (富文本)</h5>
+    
     <div class="mb-4">
-        <label class="small fw-bold text-secondary mb-2">触发指令</label>
-        <input type="text" class="form-control border-0 bg-light py-2 px-3 rounded-3" 
-               value="{{g[7] or '查询'}}" id="q_cmd" onchange="fastSave('cmd_query', this.value)">
-    </div>
-
-    <div class="mb-4">
-        <label class="small fw-bold text-secondary mb-3 d-block">回复模板 (富文本模式)</label>
+        <label class="small fw-bold text-muted mb-3 d-block">点击下方按钮插入占位符：</label>
         <div class="d-flex flex-wrap gap-2 mb-3">
-            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="addTag('{onlineEmoji}')">✨ 在线表情</button>
-            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="addTag('{认证用户名字}')">👤 用户名字</button>
-            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="addTag('{UID}')">🆔 UID</button>
-            <button class="btn btn-outline-danger btn-sm rounded-pill px-3" onclick="addTag('{地区Value}')">📍 地区</button>
-            <button class="btn btn-outline-warning btn-sm rounded-pill px-3" onclick="addTag('{老师名}')">🎴 老师名</button>
+            <button class="btn btn-outline-primary btn-sm rounded-pill" onclick="addTag('{onlineEmoji}')">✨ 表情</button>
+            <button class="btn btn-outline-primary btn-sm rounded-pill" onclick="addTag('{姓名Value}')">👤 姓名</button>
+            <button class="btn btn-outline-danger btn-sm rounded-pill" onclick="addTag('{地区Value}')">📍 地区</button>
         </div>
-
-        <div id="q-editor" style="height: 250px; border-radius: 0 0 15px 15px;">{{g[8]|safe}}</div>
-    </div>
-
-    <div class="p-4 rounded-4" style="background: #f8fafd; border: 2px dashed #cbd5e1;">
-        <div class="small text-secondary mb-2"><i class="bi bi-eye me-1"></i> Telegram 预览效果：</div>
-        <div id="q-preview" class="small lh-base"></div>
+        
+        <div id="editor-container" style="height: 250px;">{{group.list_template|safe}}</div>
     </div>
 
     <div class="text-end mt-4">
-        <button class="btn btn-primary px-5 py-2 rounded-pill fw-bold shadow-sm" onclick="saveTpl()">确认发布</button>
+        <button class="btn btn-primary px-5 rounded-pill" onclick="saveData()">确认保存</button>
     </div>
 </div>
 
 <script>
 let quill;
 document.addEventListener('DOMContentLoaded', () => {
-    quill = new Quill('#q-editor', {
+    quill = new Quill('#editor-container', {
         theme: 'snow',
-        modules: { toolbar: [['bold', 'italic', 'underline'], ['link', {'color':[]}], ['clean']] }
+        modules: { toolbar: [['bold', 'italic', 'underline'], [{'color': []}], ['clean']] }
     });
-    quill.on('text-change', renderPreview);
-    renderPreview();
 });
 
 function addTag(tag) {
     const range = quill.getSelection(true);
     quill.insertText(range.index, tag, {'bold': true, 'color': '#0d6efd'});
-    quill.setSelection(range.index + tag.length);
 }
 
-function renderPreview() {
-    let html = quill.root.innerHTML;
-    const mock = (n, a) => html.replace(/{onlineEmoji}/g,'✅').replace(/{认证用户名字}/g,n).replace(/{UID}/g,'888').replace(/{地区Value}/g,a).replace(/{老师名}/g,'王老师');
-    document.getElementById('q-preview').innerHTML = `<div class="mb-1">${mock('张三','曼谷')}</div><div>${mock('李四','台北')}</div>`;
-}
-
-async function saveTpl() {
+async function saveData() {
     const fd = new FormData();
-    fd.append('sid','{{sid}}'); fd.append('gid','{{gid}}');
-    fd.append('field','tpl_query'); fd.append('value', quill.root.innerHTML);
-    await fetch('/api/save_group', {method:'POST', body:fd});
+    fd.append('sid', '{{sid}}'); fd.append('gid', '{{gid}}');
+    fd.append('list_t', quill.root.innerHTML); // 富文本内容
+    fd.append('check_t', ''); // 可以按需扩展
+    fd.append('fields', '地区,价格,链接');
+    fd.append('emoji', '✅');
+    await fetch('/api/save', {method: 'POST', body: fd});
     alert("保存成功！");
-}
-
-async function fastSave(f, v) {
-    const fd = new FormData();
-    fd.append('sid','{{sid}}'); fd.append('gid','{{gid}}');
-    fd.append('field', f); fd.append('value', v);
-    await fetch('/api/save_group', {method:'POST', body:fd});
 }
 </script>
 {% endblock %}
