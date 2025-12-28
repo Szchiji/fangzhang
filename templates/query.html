@@ -1,73 +1,45 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card p-4">
-    <div class="d-flex align-items-center mb-4">
-        <div class="bg-info-soft text-info p-2 rounded-3 me-3" style="background: rgba(67,97,238,0.1);">
-            <i class="bi bi-search fs-4"></i>
+<div class="card p-4 border-0 shadow-sm">
+    <h5 class="fw-bold mb-4">查询指令与模板配置</h5>
+    <div class="mb-4">
+        <label class="small fw-bold mb-2">查询触发指令</label>
+        <input type="text" class="form-control" value="{{g[9]}}" onchange="updateVal('query_cmd', this.value)">
+    </div>
+    
+    <div class="mb-4">
+        <label class="small fw-bold mb-3">在线人员列表模板</label>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="addTag('{名字}')">👤 用户名字</button>
+            <button class="btn btn-sm btn-outline-danger rounded-pill px-3" onclick="addTag('{地区}')">📍 地区</button>
+            <button class="btn btn-sm btn-outline-success rounded-pill px-3" onclick="addTag('{老师}')">🎴 老师名</button>
+            <button class="btn btn-sm btn-outline-info rounded-pill px-3" onclick="addTag('{时间}')">⏰ 时间</button>
         </div>
-        <h5 class="fw-bold m-0">查询指令与模板配置</h5>
+        <textarea id="tpl" class="form-control" rows="5" oninput="preview(this.value)" onchange="updateVal('query_tpl', this.value)">{{g[10] or '{名字} - {地区}'}}</textarea>
     </div>
 
-    <form id="queryForm">
-        <input type="hidden" name="sid" value="{{sid}}">
-        <input type="hidden" name="gid" value="{{gid}}">
-        
-        <div class="mb-4">
-            <label class="small fw-bold text-muted mb-2">查询触发指令</label>
-            <div class="input-group">
-                <span class="input-group-text bg-white"><i class="bi bi-terminal"></i></span>
-                <input type="text" class="form-control py-2" name="query_cmd" value="{{ g[9] or '今日榨汁' }}" onchange="updateValue('query_cmd', this.value)">
-            </div>
-            <div class="form-text">用户在群内发送此文字，机器人将回复在线名单。</div>
-        </div>
-
-        <div class="mb-3">
-            <label class="small fw-bold text-muted mb-2">在线人员列表模板</label>
-            
-            <div class="d-flex flex-wrap gap-2 mb-3">
-                <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="insertTag('{onlineEmoji}')">✨ 在线表情</button>
-                <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="insertTag('{认证用户名字}')">👤 用户名字</button>
-                <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="insertTag('{在线用户ID}')">🆔 UID</button>
-                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="insertTag('{地区Value}')">📍 地区</button>
-                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="insertTag('{老师名字Value}')">👩‍🏫 老师名</button>
-            </div>
-
-            <textarea id="tpl_input" name="query_tpl" class="form-control" rows="5" 
-                      onchange="updateValue('query_tpl', this.value)" 
-                      placeholder="例如：{onlineEmoji} {认证用户名字} - {地区Value}">{{ g[10] or '' }}</textarea>
-            
-            <div class="mt-3 p-3 bg-light rounded-3 border-dashed">
-                <small class="text-muted d-block mb-1"><i class="bi bi-eye me-1"></i> 实时效果预览样板：</small>
-                <p class="m-0 font-monospace small">✅ 张三 - 台北 <br>✅ 李四 - 曼谷</p>
-            </div>
-        </div>
-
-        <div class="text-end mt-4">
-            <button type="button" onclick="showToast('✅ 查询模板保存成功')" class="btn btn-primary px-5 rounded-pill shadow">确认发布</button>
-        </div>
-    </form>
+    <div class="p-3 bg-light rounded border border-dashed">
+        <div class="small text-muted mb-2">👁️ 实时效果预览样板：</div>
+        <div id="pre" class="small"></div>
+    </div>
 </div>
 
 <script>
-    function insertTag(tag) {
-        const area = document.getElementById('tpl_input');
-        const start = area.selectionStart;
-        const end = area.selectionEnd;
-        const text = area.value;
-        area.value = text.substring(0, start) + tag + text.substring(end);
-        area.focus();
-        // 更新数据库
-        updateValue('query_tpl', area.value);
-    }
-
-    async function updateValue(field, value) {
-        const fd = new FormData();
-        fd.append('sid', '{{sid}}'); fd.append('gid', '{{gid}}');
-        fd.append('field', field); fd.append('value', value);
-        await fetch('/api/save', { method: 'POST', body: fd });
-    }
+function addTag(t) {
+    const i = document.getElementById('tpl');
+    i.value += t;
+    preview(i.value);
+    updateVal('query_tpl', i.value);
+}
+function preview(v) {
+    const sample = v.replace(/{名字}/g, '张三').replace(/{地区}/g, '台北').replace(/{老师}/g, '王老师').replace(/{时间}/g, '14:00');
+    document.getElementById('pre').innerHTML = `✅ ${sample}<br>✅ 李四 - 曼谷`;
+}
+async function updateVal(f, v) {
+    const fd = new FormData();
+    fd.append('sid', '{{sid}}'); fd.append('gid', '{{gid}}'); fd.append('field', f); fd.append('value', v);
+    await fetch('/api/save', {method:'POST', body:fd});
+}
+preview(document.getElementById('tpl').value);
 </script>
-<style>
-    .border-dashed { border: 2px dashed #e2e8f0; }
-</style>
 {% endblock %}
