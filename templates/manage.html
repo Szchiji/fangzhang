@@ -2,111 +2,115 @@
 
 {% block content %}
 <section id="sec-base">
-    <h5 class="fw-bold mb-4">样式与字段配置</h5>
+    <h5 class="fw-bold mb-4">全局样式配置</h5>
     <form action="/api/save" method="post" onsubmit="syncAll()">
         <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-        <div class="card p-4">
+        <div class="card p-3 p-md-4">
             <div class="row g-3 mb-3">
-                <div class="col-8"><label class="small fw-bold">占位符 (逗号隔开)</label><input type="text" name="fields" class="form-control" value="{{group.custom_fields}}"></div>
-                <div class="col-4"><label class="small fw-bold">打卡图标</label><input type="text" name="emoji" class="form-control" value="{{group.like_emoji}}"></div>
+                <div class="col-12 col-md-8"><label class="small fw-bold mb-1">自定义字段 (逗号分隔)</label><input type="text" name="fields" class="form-control" value="{{group.custom_fields}}"></div>
+                <div class="col-12 col-md-4"><label class="small fw-bold mb-1">打卡 Emoji</label><input type="text" name="emoji" class="form-control" value="{{group.like_emoji}}"></div>
             </div>
-            <div class="mb-3 p-2 bg-light border rounded">
-                <button type="button" class="btn btn-sm btn-dark me-1" onclick="insertV('{姓名Value}')">{姓名}</button>
-                {% for f in group.custom_fields.split(',') %}<button type="button" class="btn btn-sm btn-outline-primary me-1" onclick="insertV('{{'{'}}{{f}}Value{{'}'}}')">{{f}}</button>{% endfor %}
+            
+            <label class="small fw-bold mb-2">插入占位符</label>
+            <div class="mb-3 p-2 bg-light border rounded d-flex flex-wrap">
+                <button type="button" class="btn btn-sm btn-dark m-1" onclick="insertV('{姓名Value}')">{姓名}</button>
+                {% for f in group.custom_fields.split(',') %}<button type="button" class="btn btn-sm btn-outline-primary m-1" onclick="insertV('{{'{'}}{{f}}Value{{'}'}}')">{{f}}</button>{% endfor %}
             </div>
+            
             <div class="row">
-                <div class="col-6"><label class="small fw-bold">名单样式</label><div id="ed-list">{{group.list_template|safe}}</div><input type="hidden" name="list_t" id="in-list"></div>
-                <div class="col-6"><label class="small fw-bold">打卡回复</label><div id="ed-check">{{group.checkin_template|safe}}</div><input type="hidden" name="check_t" id="in-check"></div>
+                <div class="col-12 col-md-6 mb-3"><label class="small fw-bold mb-1">在线名单模板</label><div id="ed-list" style="height:150px;" class="bg-white">{{group.list_template|safe}}</div><input type="hidden" name="list_t" id="in-list"></div>
+                <div class="col-12 col-md-6 mb-3"><label class="small fw-bold mb-1">打卡回复模板</label><div id="ed-check" style="height:150px;" class="bg-white">{{group.checkin_template|safe}}</div><input type="hidden" name="check_t" id="in-check"></div>
             </div>
-            <button type="submit" class="btn btn-primary mt-3 px-5">保存配置</button>
+            <button type="submit" class="btn btn-primary mt-3 w-100 shadow">保存全局设置</button>
         </div>
     </form>
 </section>
 
 <section id="sec-users" style="display:none;">
-    <div class="d-flex justify-content-between mb-4">
-        <h5 class="fw-bold">老师库管理</h5>
-        <button class="btn btn-primary btn-sm" onclick="openUserModal()">+ 新增老师</button>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="fw-bold">授权老师列表</h5>
+        <button class="btn btn-success btn-sm" onclick="openUserModal()"><i class="bi bi-plus-lg"></i> 添加老师</button>
     </div>
     <div class="card overflow-hidden">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light"><tr><th>姓名/ID</th><th>有效期</th><th>操作</th></tr></thead>
-            <tbody>
-                {% for u in users %}
-                <tr>
-                    <td>{{u.name}}<br><small class="text-muted">{{u.user_id}}</small></td>
-                    <td><span class="badge {{ 'bg-success' if u.expire_date and u.expire_date >= today else 'bg-danger' }}">{{ u.expire_date or '永久' }}</span></td>
-                    <td>
-                        <button class="btn btn-link btn-sm" onclick='editUser({{ u | tojson }})'>编辑</button>
-                        <form action="/api/user" method="post" class="d-inline"><input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="user_id" value="{{u.user_id}}"><input type="hidden" name="action" value="del"><button type="submit" class="btn btn-link btn-sm text-danger">删除</button></form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light"><tr><th>姓名/ID</th><th>有效期</th><th>操作</th></tr></thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td><strong>{{u.name}}</strong><br><small class="text-muted">{{u.user_id}}</small></td>
+                        <td><span class="badge {{ 'bg-success' if not u.expire_date or u.expire_date >= today else 'bg-danger' }}">{{ u.expire_date or '永久' }}</span></td>
+                        <td>
+                            <button class="btn btn-outline-primary btn-sm" onclick='editUser({{ u | tojson }})'><i class="bi bi-pencil"></i></button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </section>
 
 <section id="sec-timers" style="display:none;">
-    <div class="d-flex justify-content-between mb-4">
-        <h5 class="fw-bold">定时广告任务</h5>
-        <button class="btn btn-primary btn-sm" onclick="openTimerModal()">+ 新增任务</button>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="fw-bold">自动广告任务</h5>
+        <button class="btn btn-primary btn-sm" onclick="openTimerModal()"><i class="bi bi-megaphone"></i> 新增广告</button>
     </div>
-    <div class="card p-3">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light"><tr><th>备注</th><th>频率/排期</th><th>操作</th></tr></thead>
-            <tbody>
-                {% for t in timers %}
-                <tr>
-                    <td>{{t.remark}}</td>
-                    <td class="small text-muted">{{t.interval_hours}}h <br> {{t.start_time}} 至 {{t.end_time}}</td>
-                    <td>
-                        <button class="btn btn-link btn-sm" onclick='editTimer({{ t | tojson }})'>编辑</button>
-                        <form action="/api/timer" method="post" class="d-inline"><input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="tid" value="{{t.id}}"><input type="hidden" name="action" value="del"><button type="submit" class="btn btn-link btn-sm text-danger">删除</button></form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="card p-3 shadow-sm border-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light"><tr><th>任务</th><th>循环频率</th><th>操作</th></tr></thead>
+                <tbody>
+                    {% for t in timers %}
+                    <tr>
+                        <td>{{t.remark}}</td>
+                        <td>每 {{t.interval_hours}} 小时</td>
+                        <td><button class="btn btn-light btn-sm text-primary" onclick='editTimer({{ t | tojson }})'>编辑任务</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </section>
 
-<div class="modal fade" id="userModal" tabindex="-1"><div class="modal-dialog"><form action="/api/user" method="post" class="modal-content">
-    <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="action" id="u-action" value="add"><input type="hidden" name="data" id="in-user-data">
-    <div class="modal-header"><h6 id="u-title">老师信息</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-        <div class="mb-2"><label class="small fw-bold">TG UID</label><input type="text" name="user_id" id="u-id" class="form-control form-control-sm" required></div>
-        <div class="mb-2"><label class="small fw-bold">姓名</label><input type="text" name="name" id="u-name" class="form-control form-control-sm" required></div>
-        <div class="mb-3"><label class="small fw-bold text-danger">有效期</label><input type="date" name="expire" id="u-expire" class="form-control form-control-sm"></div>
-        <div class="p-2 bg-light rounded border small">
-            {% for f in group.custom_fields.split(',') %}<div class="mb-1"><label>{{f}}</label><input type="text" class="form-control form-control-sm dyn-input" data-key="{{f}}"></div>{% endfor %}
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><form action="/api/user" method="post" class="modal-content border-0">
+        <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="action" id="u-action" value="add"><input type="hidden" name="data" id="in-user-data">
+        <div class="modal-header"><h6>编辑老师信息</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="mb-3"><label class="small">Telegram UID</label><input type="text" name="user_id" id="u-id" class="form-control" required></div>
+            <div class="mb-3"><label class="small">姓名</label><input type="text" name="name" id="u-name" class="form-control" required></div>
+            <div class="mb-3"><label class="small text-danger">到期日期 (留空为永久)</label><input type="date" name="expire" id="u-expire" class="form-control"></div>
+            <div id="dyn-fields" class="p-3 bg-light rounded border small">
+                <p class="mb-2 fw-bold">自定义字段内容</p>
+                {% for f in group.custom_fields.split(',') %}<div class="mb-2"><label>{{f}}</label><input type="text" class="form-control form-control-sm dyn-input" data-key="{{f}}"></div>{% endfor %}
+            </div>
         </div>
-    </div>
-    <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm" onclick="packUserData()">保存</button></div>
-</form></div></div>
+        <div class="modal-footer"><button type="submit" class="btn btn-primary w-100" onclick="packUserData()">保存提交</button></div>
+    </form></div>
+</div>
 
-<div class="modal fade" id="timerModal" tabindex="-1"><div class="modal-dialog modal-lg"><form action="/api/timer" method="post" class="modal-content">
-    <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="action" id="t-action" value="add"><input type="hidden" name="tid" id="t-id">
-    <div class="modal-header"><h6 id="t-title">定时任务</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-        <div class="row g-2 mb-2">
-            <div class="col-6"><label class="small fw-bold">备注</label><input type="text" name="remark" id="t-remark" class="form-control form-control-sm" required></div>
-            <div class="col-3"><label class="small fw-bold">间隔(h)</label><input type="number" name="hours" id="t-hours" class="form-control form-control-sm" value="3"></div>
-            <div class="col-3"><label class="small fw-bold">撤回旧消息</label><select name="delete_last" id="t-del" class="form-select form-select-sm"><option value="1">是</option><option value="0">否</option></select></div>
+<div class="modal fade" id="timerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered"><form action="/api/timer" method="post" class="modal-content">
+        <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}"><input type="hidden" name="action" id="t-action" value="add"><input type="hidden" name="tid" id="t-id">
+        <div class="modal-header"><h6>定时广告配置</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="row g-2 mb-3">
+                <div class="col-6"><label class="small">备注</label><input type="text" name="remark" id="t-remark" class="form-control" required></div>
+                <div class="col-3"><label class="small">间隔(h)</label><input type="number" name="hours" id="t-hours" class="form-control" value="3"></div>
+                <div class="col-3"><label class="small">撤回旧消息</label><select name="delete_last" id="t-del" class="form-select"><option value="1">是</option><option value="0">否</option></select></div>
+            </div>
+            <div id="ed-timer" style="height:200px;"></div><input type="hidden" name="content" id="in-timer">
         </div>
-        <div class="row g-2 mb-3">
-            <div class="col-6"><label class="small fw-bold">开始时间</label><input type="datetime-local" name="start" id="t-start" class="form-control form-control-sm"></div>
-            <div class="col-6"><label class="small fw-bold">结束时间</label><input type="datetime-local" name="end" id="t-end" class="form-control form-control-sm"></div>
-        </div>
-        <div id="ed-timer" style="height:150px;"></div><input type="hidden" name="content" id="in-timer">
-    </div>
-    <div class="modal-footer"><button type="submit" class="btn btn-primary btn-sm px-4" onclick="syncTimer()">保存</button></div>
-</form></div></div>
+        <div class="modal-footer"><button type="submit" class="btn btn-primary w-100" onclick="syncTimer()">保存并启动</button></div>
+    </form></div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    var qCfg = { theme: 'snow', modules: { toolbar: [['bold', 'italic', 'underline'], [{color:[]}], ['clean']] } };
+    var qCfg = { theme: 'snow', modules: { toolbar: [['bold', 'italic'], [{color:[]}], ['clean']] } };
     var qList = new Quill('#ed-list', qCfg), qCheck = new Quill('#ed-check', qCfg), qTime = new Quill('#ed-timer', qCfg);
     var curEd = qList;
     qList.on('selection-change', r => { if(r) curEd = qList; });
@@ -119,25 +123,20 @@
         let obj = {}; document.querySelectorAll('.dyn-input').forEach(i => obj[i.dataset.key] = i.value);
         document.getElementById('in-user-data').value = JSON.stringify(obj); 
     }
-
     const uModal = new bootstrap.Modal('#userModal'), tModal = new bootstrap.Modal('#timerModal');
-    function openUserModal(){ document.getElementById('u-action').value = 'add'; document.getElementById('u-id').readOnly = false; uModal.show(); }
+    function openUserModal(){ document.getElementById('u-action').value = 'add'; uModal.show(); }
     function editUser(u){
         document.getElementById('u-action').value = 'edit'; document.getElementById('u-id').value = u.user_id;
-        document.getElementById('u-id').readOnly = true; document.getElementById('u-name').value = u.name;
-        document.getElementById('u-expire').value = u.expire_date || '';
+        document.getElementById('u-name').value = u.name; document.getElementById('u-expire').value = u.expire_date || '';
         let d = JSON.parse(u.data_json || '{}');
         document.querySelectorAll('.dyn-input').forEach(i => i.value = d[i.dataset.key] || '');
         uModal.show();
     }
-    function openTimerModal(){ document.getElementById('t-action').value = 'add'; qTime.root.innerHTML = ''; tModal.show(); }
+    function openTimerModal(){ document.getElementById('t-action').value = 'add'; tModal.show(); }
     function editTimer(t){
         document.getElementById('t-action').value = 'edit'; document.getElementById('t-id').value = t.id;
         document.getElementById('t-remark').value = t.remark; document.getElementById('t-hours').value = t.interval_hours;
-        document.getElementById('t-del').value = t.delete_last; 
-        document.getElementById('t-start').value = (t.start_time || '').replace(' ', 'T');
-        document.getElementById('t-end').value = (t.end_time || '').replace(' ', 'T');
-        qTime.root.innerHTML = t.content; tModal.show();
+        document.getElementById('t-del').value = t.delete_last; qTime.root.innerHTML = t.content; tModal.show();
     }
 </script>
 {% endblock %}
