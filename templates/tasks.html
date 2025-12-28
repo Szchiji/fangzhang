@@ -1,24 +1,20 @@
 {% extends "layout.html" %}
 {% block content %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" />
-<script src="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js"></script>
-
-<div class="card p-4 border-0 shadow-sm">
+<div class="card p-4 shadow-sm">
     <div class="d-flex justify-content-between mb-4">
-        <h5 class="fw-bold m-0"><i class="bi bi-calendar-check me-2 text-primary"></i>定时计划</h5>
-        <button class="btn btn-primary rounded-pill px-4" onclick="openModal()"><i class="bi bi-plus-lg"></i> 新增计划</button>
+        <h5 class="fw-bold m-0">定时任务计划</h5>
+        <button class="btn btn-primary rounded-pill px-4" onclick="showTaskModal()">+ 新增定时任务</button>
     </div>
-    
-    <div class="row g-3">
+    <div class="row g-3" id="taskBox">
         {% for t in tasks %}
-        <div class="col-md-6" id="t-{{t[0]}}">
-            <div class="card bg-light border-0 p-3">
+        <div class="col-md-6" id="task-{{t[0]}}">
+            <div class="card bg-light p-3 border-0">
                 <div class="d-flex justify-content-between fw-bold mb-2">
                     <span>{{t[4]}}</span>
-                    <button class="btn-close small" onclick="delT('{{t[0]}}')" style="transform: scale(0.7);"></button>
+                    <i class="bi bi-trash text-danger" style="cursor:pointer" onclick="delT('{{t[0]}}')"></i>
                 </div>
-                <div class="small text-muted text-truncate">{{t[2]|safe}}</div>
-                <div class="mt-2 small text-primary">每 {{t[3]}} 分钟发送一次</div>
+                <div class="small text-muted mb-2 text-truncate">{{t[2]|safe}}</div>
+                <div class="badge bg-white text-primary border w-50">每 {{t[3]}} 分钟发送</div>
             </div>
         </div>
         {% endfor %}
@@ -27,48 +23,59 @@
 
 <div class="modal fade" id="tModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <form id="tForm" class="modal-content border-0">
+        <form id="tForm" class="modal-content">
             <div class="modal-body p-4">
-                <h6 class="fw-bold mb-4">新建多媒体富消息任务</h6>
-                <div class="mb-3"><label class="small fw-bold">任务备注</label><input type="text" name="remark" class="form-control" placeholder="如：晚班提醒" required></div>
+                <h6 class="fw-bold mb-4">创建多媒体富消息</h6>
                 <div class="mb-3">
-                    <label class="small fw-bold mb-2">消息内容</label>
-                    <div id="vditor_div"></div>
-                    <input type="hidden" name="content" id="t_content">
+                    <label class="small fw-bold">任务备注</label>
+                    <input type="text" name="remark" class="form-control" required>
                 </div>
-                <div class="mb-4"><label class="small fw-bold">周期 (分钟)</label><input type="number" name="cron" class="form-control" value="60"></div>
-                <button type="button" onclick="saveT()" class="btn btn-primary w-100 py-3 rounded-pill shadow">启动定时发布</button>
+                <div class="mb-3">
+                    <label class="small fw-bold mb-2">内容 (工具栏图标在此处显示)</label>
+                    <div id="vditor-target"></div>
+                    <input type="hidden" name="content" id="final-content">
+                </div>
+                <div class="mb-4">
+                    <label class="small fw-bold">频率 (分钟)</label>
+                    <input type="number" name="cron" class="form-control" value="60">
+                </div>
+                <button type="button" onclick="submitTask()" class="btn btn-primary w-100 py-2 rounded-pill">立即保存任务</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-let v;
-const modal = new bootstrap.Modal(document.getElementById('tModal'));
-function openModal() {
-    modal.show();
-    if(!v) {
-        setTimeout(() => {
-            v = new Vditor('vditor_div', {
-                height: 300, theme: 'classic', icon: 'ant-design',
-                placeholder: '输入消息内容，支持图片描述...',
-                toolbar: ['emoji', 'headings', 'bold', 'italic', 'strike', '|', 'line', 'quote', 'list', 'link', 'code', 'fullscreen']
+let vditor;
+const myModal = new bootstrap.Modal('#tModal');
+
+function showTaskModal() {
+    myModal.show();
+    // 弹窗完全显示后再初始化编辑器，防止图标不显示
+    document.getElementById('tModal').addEventListener('shown.bs.modal', function () {
+        if (!vditor) {
+            vditor = new Vditor('vditor-target', {
+                height: 300,
+                toolbar: ['emoji', 'headings', 'bold', 'italic', 'strike', 'link', 'list', 'quote', 'code', 'fullscreen'],
+                cache: { enable: false }
             });
-        }, 300);
-    }
+        }
+    }, { once: true });
 }
-async function saveT() {
-    document.getElementById('t_content').value = v.getHTML();
+
+async function submitTask() {
+    document.getElementById('final-content').value = vditor.getHTML();
     const fd = new FormData(document.getElementById('tForm'));
-    fd.append('sid','{{sid}}'); fd.append('gid','{{gid}}');
-    await fetch('/api/add_task', {method:'POST', body:fd});
+    fd.append('sid', '{{sid}}'); fd.append('gid', '{{gid}}');
+    await fetch('/api/add_task', { method: 'POST', body: fd });
     location.reload();
 }
+
 async function delT(tid) {
+    if(!confirm("确定删除？")) return;
     const fd = new FormData(); fd.append('sid','{{sid}}'); fd.append('tid',tid);
-    await fetch('/api/del_task', {method:'POST', body:fd});
-    document.getElementById(`t-${tid}`).remove();
+    await fetch('/api/del_task', { method: 'POST', body: fd });
+    location.reload();
 }
 </script>
 {% endblock %}
