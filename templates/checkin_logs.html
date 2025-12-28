@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-calendar-check-fill me-2 text-success"></i>最近打卡历史</h5>
+        <span class="badge bg-light text-dark text-muted">显示最近 100 条</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">日期</th>
+                        <th>用户名</th>
+                        <th>用户 ID</th>
+                        <th class="text-end pe-4">状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td class="ps-4 text-muted">{{ log.date }}</td>
+                        <td class="fw-bold">{{ log.name }}</td>
+                        <td><code>{{ log.uid }}</code></td>
+                        <td class="text-end pe-4"><span class="badge bg-success">成功</span></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="text-center py-5 text-muted">目前还没有打卡记录</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
