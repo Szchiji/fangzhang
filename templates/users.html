@@ -1,58 +1,46 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card p-4 shadow-sm border-0">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h5 class="fw-bold m-0"><i class="bi bi-people-fill me-2 text-primary"></i>认证用户管理</h5>
-        <button class="btn btn-primary rounded-pill px-4" onclick="openModal()"><i class="bi bi-plus-lg me-1"></i>新增成员</button>
+<div class="card p-4 border-0 shadow-sm">
+    <div class="d-flex justify-content-between mb-4">
+        <h5 class="fw-bold m-0"><i class="bi bi-shield-lock me-2 text-primary"></i>认证成员</h5>
+        <button class="btn btn-dark rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#uModal">+ 新增认证</button>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-hover align-middle">
-            <thead class="table-light">
-                <tr class="small text-muted"><th>姓名 / UID</th><th>设计占位符内容</th><th>当前状态</th><th>有效期</th><th>管理</th></tr>
-            </thead>
-            <tbody>
-                {% for u in users %}
-                <tr>
-                    <td><b>{{u[2]}}</b><br><small class="text-muted">{{u[0]}}</small></td>
-                    <td><span class="badge bg-light text-dark">地区: {{u[4] or '未填'}}</span><br><span class="badge bg-light text-dark">老师: {{u[5] or '未填'}}</span></td>
-                    <td>{% if u[3]=='online' %}<span class="text-success small">● 在线 ({{u[6]}})</span>{% else %}<span class="text-muted small">○ 休息</span>{% endif %}</td>
-                    <td><small>{{u[7] or '永久'}}</small></td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary border-0" onclick="editUser('{{u[0]}}','{{u[2]}}','{{u[4]}}','{{u[5]}}','{{u[7]}}')"><i class="bi bi-pencil-square"></i></button>
-                        <button class="btn btn-sm btn-outline-danger border-0" onclick="delUser('{{u[0]}}')"><i class="bi bi-trash3"></i></button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    <table class="table align-middle">
+        <thead><tr class="small text-muted"><th>姓名</th><th>地区/老师</th><th>到期时间</th><th>操作</th></tr></thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td><b>{{u[2]}}</b><br><small class="text-muted">{{u[0]}}</small></td>
+                <td>{{u[4] or '-'}} / {{u[5] or '-'}}</td>
+                <td>{{u[7] or '永久'}}</td>
+                <td><button class="btn btn-sm btn-outline-danger" onclick="delU('{{u[0]}}')">删除</button></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 
-<div class="modal fade" id="userModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <form id="userForm" class="modal-content border-0 shadow-lg">
-            <div class="modal-body p-4">
-                <h6 class="fw-bold mb-4" id="mTitle">新增认证成员</h6>
-                <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                <div class="mb-3"><label class="small fw-bold">用户数字 UID</label><input type="text" name="user_id" id="m_uid" class="form-control bg-light" required></div>
-                <div class="mb-3"><label class="small fw-bold">姓名 (占位符: {名字})</label><input type="text" name="name" id="m_name" class="form-control" required></div>
-                <div class="row">
-                    <div class="col-6 mb-3"><label class="small fw-bold">地区 ({地区})</label><input type="text" name="area" id="m_area" class="form-control"></div>
-                    <div class="col-6 mb-3"><label class="small fw-bold">老师 ({老师})</label><input type="text" name="teacher" id="m_teacher" class="form-control"></div>
-                </div>
-                <div class="mb-4"><label class="small fw-bold">认证有效期 ({到期时间})</label><input type="date" name="expire_at" id="m_expire" class="form-control"></div>
-                <button type="button" onclick="saveUser()" class="btn btn-primary w-100 py-2 rounded-pill">保存配置</button>
-            </div>
-        </form>
-    </div>
+<div class="modal fade" id="uModal" tabindex="-1">
+    <div class="modal-dialog"><form id="uForm" class="modal-content p-4 border-0 shadow">
+        <h6 class="fw-bold mb-3">授权新用户</h6>
+        <div class="mb-2"><label class="small fw-bold">Telegram ID</label><input type="text" name="user_id" class="form-control" required></div>
+        <div class="mb-2"><label class="small fw-bold">显示名字</label><input type="text" name="name" class="form-control" required></div>
+        <div class="row mb-2">
+            <div class="col-6"><label class="small fw-bold">地区</label><input type="text" name="area" class="form-control"></div>
+            <div class="col-6"><label class="small fw-bold">分配老师</label><input type="text" name="teacher" class="form-control"></div>
+        </div>
+        <div class="mb-4"><label class="small fw-bold">有效期</label><input type="date" name="expire_at" class="form-control"></div>
+        <button type="button" onclick="saveU()" class="btn btn-primary w-100 py-2 rounded-pill">保存授权</button>
+    </form></div>
 </div>
 
 <script>
-const m = new bootstrap.Modal(document.getElementById('userModal'));
-function openModal() { document.getElementById('userForm').reset(); document.getElementById('m_uid').readOnly=false; document.getElementById('mTitle').innerText="新增认证成员"; m.show(); }
-function editUser(id, n, a, t, e) { document.getElementById('m_uid').value=id; document.getElementById('m_uid').readOnly=true; document.getElementById('m_name').value=n; document.getElementById('m_area').value=a; document.getElementById('m_teacher').value=t; document.getElementById('m_expire').value=e; document.getElementById('mTitle').innerText="修改成员信息"; m.show(); }
-async function saveUser() { await fetch('/api/add_user', {method:'POST', body:new FormData(document.getElementById('userForm'))}); location.reload(); }
-async function delUser(uid) { if(confirm('确定删除?')) { const fd=new FormData(); fd.append('sid','{{sid}}'); fd.append('gid','{{gid}}'); fd.append('user_id',uid); await fetch('/api/del_user',{method:'POST',body:fd}); location.reload(); } }
+async function saveU() {
+    const fd = new FormData(document.getElementById('uForm'));
+    fd.append('sid','{{sid}}'); fd.append('gid','{{gid}}');
+    await fetch('/api/add_user', {method:'POST', body:fd});
+    location.reload();
+}
 </script>
 {% endblock %}
