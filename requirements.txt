@@ -1,5 +1,6 @@
 fastapi
 uvicorn
-aiogram>=3.0.0
+aiogram
+apscheduler
 jinja2
 python-multipart
