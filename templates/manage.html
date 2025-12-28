@@ -1,103 +1,87 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="row">
-    <div class="col-md-12 mb-4">
-        <div class="card main-card">
-            <div class="card-header bg-white fw-bold">⚙️ 群组配置 (ID: {{ gid }})</div>
-            <div class="card-body">
-                <form action="/update_settings" method="POST">
-                    <input type="hidden" name="sid" value="{{ sid }}">
-                    <input type="hidden" name="gid" value="{{ gid }}">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">自定义字段 (逗号分隔)</label>
-                            <input type="text" name="fields" class="form-control" value="{{ group.custom_fields }}">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">点赞表情</label>
-                            <input type="text" name="emoji" class="form-control" value="{{ group.like_emoji }}">
-                        </div>
-                        <div class="col-12">
-                            <button type="submit" class="btn btn-primary btn-custom">保存全局设置</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-12">
-        <div class="card main-card">
-            <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
-                <span>👤 已验证用户列表</span>
-                <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">+ 添加用户</button>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>姓名</th>
-                                <th>用户 ID</th>
-                                <th>到期时间</th>
-                                <th>操作</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for user in users %}
-                            <tr>
-                                <td>{{ user.name }}</td>
-                                <td><code>{{ user.id }}</code></td>
-                                <td>{{ user.expire }}</td>
-                                <td>
-                                    <form action="/delete_user" method="POST" style="display:inline;">
-                                        <input type="hidden" name="sid" value="{{ sid }}">
-                                        <input type="hidden" name="gid" value="{{ gid }}">
-                                        <input type="hidden" name="uid" value="{{ user.id }}">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定删除吗？')">删除</button>
-                                    </form>
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr><td colspan="4" class="text-center py-4">暂无验证用户</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="addUserModal" tabindex="-1">
-    <div class="modal-dialog">
-        <form action="/add_user" method="POST" class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">添加新验证用户</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
+    <div class="col-md-2">{% include 'sidebar.html' %}</div>
+    <div class="col-md-10">
+        <div class="card p-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-4 text-primary">机器人配置 - {{ g[1] }}</h5>
+            <form action="/update_all" method="POST">
                 <input type="hidden" name="sid" value="{{ sid }}">
                 <input type="hidden" name="gid" value="{{ gid }}">
-                <div class="mb-3">
-                    <label class="form-label">Telegram UID</label>
-                    <input type="text" name="uid" class="form-control" placeholder="例如: 2104900598" required>
+
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">打卡指令</label>
+                        <input type="text" name="checkin_cmd" class="form-control" value="{{ g[3] }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">在线/离线表情</label>
+                        <div class="input-group">
+                            <input type="text" name="on_emoji" class="form-control" value="{{ g[4] }}">
+                            <input type="text" name="off_emoji" class="form-control" value="{{ g[5] }}">
+                        </div>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">姓名/备注</label>
-                    <input type="text" name="name" class="form-control" placeholder="显示在打卡信息中" required>
+
+                <div class="list-group list-group-flush mb-4 border-top border-bottom">
+                    {% set rich_fields = [('msg_checkin_success', '打卡成功消息'), ('msg_uncheckin_success', '休息/离线消息')] %}
+                    {% for key, label in rich_fields %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-3 px-0 bg-transparent">
+                        <span class="fw-medium">{{ label }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="openRichEditor('{{ key }}')">点击修改</button>
+                        <input type="hidden" name="{{ key }}" id="src_{{ key }}" value="{{ g[7] if key == 'msg_checkin_success' else g[8] }}">
+                    </div>
+                    {% endfor %}
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">有效期 (天)</label>
-                    <input type="number" name="days" class="form-control" value="30" required>
+
+                <h6 class="fw-bold mt-4">查询在线设置</h6>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="small">查询指令</label>
+                        <input type="text" name="query_cmd" class="form-control" value="{{ g[10] }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="small">每页显示数量</label>
+                        <input type="number" name="per_page" class="form-control" value="{{ g[11] }}">
+                    </div>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="submit" class="btn btn-primary">确认添加</button>
-            </div>
-        </form>
+
+                <button type="submit" class="btn btn-primary w-100 py-2">保存所有群组配置</button>
+            </form>
+        </div>
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<div class="modal fade" id="richModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header"><h6 class="modal-title fw-bold">编辑富文本消息</h6></div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <button class="btn btn-xs btn-light border" onclick="insertVar('{name}')">{用户姓名}</button>
+                    <button class="btn btn-xs btn-light border" onclick="insertVar('{date}')">{当前日期}</button>
+                </div>
+                <div id="editor-container" style="height: 300px;"></div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-primary px-4" onclick="saveRich()">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var quill = new Quill('#editor-container', { theme: 'snow', modules: { toolbar: [['bold', 'italic', 'underline', 'link']] } });
+    var activeId = '';
+    function openRichEditor(id) {
+        activeId = id;
+        quill.root.innerHTML = document.getElementById('src_' + id).value;
+        new bootstrap.Modal(document.getElementById('richModal')).show();
+    }
+    function saveRich() {
+        document.getElementById('src_' + activeId).value = quill.root.innerHTML;
+        bootstrap.Modal.getInstance(document.getElementById('richModal')).hide();
+    }
+    function insertVar(v) { const range = quill.getSelection(); quill.insertText(range ? range.index : 0, v); }
+</script>
 {% endblock %}
