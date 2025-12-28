@@ -1,51 +1,70 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card-custom">
+<div class="card-plugin">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h5 class="fw-bold m-0"><i class="bi bi-shield-check me-2 text-primary"></i>认证用户名单</h5>
-        <button class="btn btn-primary rounded-pill px-4" onclick="showUserModal()">+ 手动添加</button>
+        <h5 class="fw-bold m-0">认证用户管理</h5>
+        <button class="btn btn-dark btn-sm rounded-pill px-3" onclick="openModal()">+ 添加用户</button>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-hover align-middle">
-            <thead class="table-light">
-                <tr class="small text-secondary">
-                    <th>用户/UID</th><th>地区</th><th>所属老师</th><th>到期时间</th><th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for u in users %}
-                <tr id="row-{{u[0]}}">
+    <table class="table align-middle">
+        <thead>
+            <tr class="small text-muted"><th>用户ID</th><th>姓名</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+            {% for key, val in conf.items() %}
+                {% if key.startswith('u_') %} <tr id="row-{{key}}">
+                    <td><code>{{ key.replace('u_', '') }}</code></td>
+                    <td><span class="badge bg-light text-dark p-2">{{ val }}</span></td>
                     <td>
-                        <div class="fw-bold">{{u[2]}}</div>
-                        <div class="small text-muted">{{u[0]}}</div>
-                    </td>
-                    <td><span class="badge bg-light text-dark fw-normal">{{u[3]}}</span></td>
-                    <td>{{u[4] or '-'}}</td>
-                    <td class="small">{{u[5] or '永久'}}</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-danger border-0 rounded-circle" onclick="delUser('{{u[0]}}')">
-                            <i class="bi bi-trash3"></i>
-                        </button>
+                        <button class="btn btn-link btn-sm text-primary" onclick="openModal('{{key.replace('u_', '')}}', '{{val}}')">修改</button>
+                        <button class="btn btn-link btn-sm text-danger" onclick="doDel('{{key}}')">删除</button>
                     </td>
                 </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-body p-4">
+                <h6 class="fw-bold mb-3" id="mTitle">编辑用户信息</h6>
+                <input type="text" id="m_uid" class="form-control mb-2" placeholder="输入 TG 用户 ID">
+                <input type="text" id="m_name" class="form-control mb-4" placeholder="输入用户姓名">
+                <button class="btn btn-primary w-100" onclick="doSave()">同步到机器人</button>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
-async function delUser(uid) {
-    if(!confirm("确定要删除该用户权限吗？")) return;
-    const fd = new FormData();
-    fd.append('uid', uid); fd.append('gid', '{{gid}}');
-    const res = await fetch('/api/user/del', {method:'POST', body:fd});
-    if(res.ok) {
-        document.getElementById(`row-${uid}`).style.opacity = '0';
-        setTimeout(()=> document.getElementById(`row-${uid}`).remove(), 300);
+    const modal = new bootstrap.Modal('#userModal');
+    
+    function openModal(uid='', name='') {
+        document.getElementById('m_uid').value = uid;
+        document.getElementById('m_uid').readOnly = uid !== ''; // 修改时 ID 不可变
+        document.getElementById('m_name').value = name;
+        document.getElementById('mTitle').innerText = uid ? "修改用户" : "新增用户";
+        modal.show();
     }
-}
-function showUserModal() { alert("7哥，手动添加功能可在此扩展弹窗！"); }
+
+    async function doSave() {
+        const uid = document.getElementById('m_uid').value;
+        const name = document.getElementById('m_name').value;
+        if(!uid || !name) return alert("必填！");
+        
+        // 调用框架提供的 quickSave，存入数据库，key 叫 u_12345
+        await quickSave('u_' + uid, name);
+        location.reload(); // 刷新页面看新列表
+    }
+
+    async function doDel(fullKey) {
+        if(!confirm("确定删除？")) return;
+        // 删除逻辑：把 value 设为空字符串（或者你可以让后端加个 del 接口，原理一样）
+        await quickSave(fullKey, ''); 
+        location.reload();
+    }
 </script>
 {% endblock %}
