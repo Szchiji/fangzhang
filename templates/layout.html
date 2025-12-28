@@ -2,34 +2,30 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>机器人管理后台</title>
+    <title>7哥定制 - 机器人后台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" />
     <style>
-        body { background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .sidebar { background: #fff; height: 100vh; border-right: 1px solid #eee; position: fixed; width: 240px; }
-        .main-content { margin-left: 240px; padding: 30px; }
-        .nav-link { color: #666; border-radius: 8px; margin-bottom: 5px; }
-        .nav-link.active { background: #0d6efd; color: #fff !important; }
-        .card { border: none; border-radius: 15px; }
+        body { background: #f8f9fa; display: flex; min-height: 100vh; }
+        .sidebar { width: 250px; background: #fff; border-right: 1px solid #dee2e6; padding: 20px; }
+        .main { flex: 1; padding: 30px; }
+        .nav-link { color: #333; margin: 5px 0; border-radius: 8px; }
+        .nav-link.active { background: #007bff; color: #fff !important; }
+        .card { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     </style>
 </head>
 <body>
-    <div class="sidebar p-3">
-        <h5 class="fw-bold mb-4 px-2">控制面板</h5>
+    <div class="sidebar">
+        <h5 class="fw-bold mb-4">管理菜单</h5>
         <div class="nav flex-column">
-            <a class="nav-link {% if tab=='basic' %}active{% endif %}" href="/manage?sid={{sid}}&gid={{gid}}&tab=basic"><i class="bi bi-gear me-2"></i>基础设置</a>
-            <a class="nav-link {% if tab=='users' %}active{% endif %}" href="/manage?sid={{sid}}&gid={{gid}}&tab=users"><i class="bi bi-people me-2"></i>认证管理</a>
-            <a class="nav-link {% if tab=='query' %}active{% endif %}" href="/manage?sid={{sid}}&gid={{gid}}&tab=query"><i class="bi bi-search me-2"></i>查询模板</a>
-            <a class="nav-link {% if tab=='tasks' %}active{% endif %}" href="/manage?sid={{sid}}&gid={{gid}}&tab=tasks"><i class="bi bi-clock me-2"></i>定时任务</a>
+            <a class="nav-link {% if tab=='basic' %}active{% endif %}" href="/manage?sid={{sid}}&gid={{gid}}&tab=basic">⚙️ 基础设置</a>
+            <a class="nav-link {% if tab=='users' %}active{% endif %}" href="/manage?sid={{sid}}&gid={{gid}}&tab=users">👥 认证管理</a>
+            <a class="nav-link {% if tab=='tasks' %}active{% endif %}" href="/manage?sid={{sid}}&gid={{gid}}&tab=tasks">⏰ 定时计划</a>
         </div>
     </div>
-    <div class="main-content">
-        {% block content %}{% endblock %}
-    </div>
-
+    <div class="main">{% block content %}{% endblock %}</div>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js"></script>
 </body>
