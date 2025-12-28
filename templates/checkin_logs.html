@@ -1,35 +1,25 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card shadow-sm border-0" style="border-radius: 15px;">
-    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-        <h5 class="mb-0 fw-bold"><i class="bi bi-calendar-check-fill me-2 text-success"></i>最近打卡历史</h5>
-        <span class="badge bg-light text-dark text-muted">显示最近 100 条</span>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th class="ps-4">日期</th>
-                        <th>用户名</th>
-                        <th>用户 ID</th>
-                        <th class="text-end pe-4">状态</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for log in logs %}
-                    <tr>
-                        <td class="ps-4 text-muted">{{ log.date }}</td>
-                        <td class="fw-bold">{{ log.name }}</td>
-                        <td><code>{{ log.uid }}</code></td>
-                        <td class="text-end pe-4"><span class="badge bg-success">成功</span></td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="4" class="text-center py-5 text-muted">目前还没有打卡记录</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+<div class="card p-4">
+    <h5 class="fw-bold mb-4">打卡系统配置</h5>
+    <form id="checkinForm">
+        <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
+        <div class="row g-3 mb-4">
+            <div class="col-md-6"><label class="small fw-bold text-muted">打卡指令</label><input type="text" name="cmd" class="form-control" value="{{g[3]}}"></div>
+            <div class="col-md-3"><label class="small fw-bold text-muted">在线表情</label><input type="text" name="on_e" class="form-control" value="{{g[4]}}"></div>
+            <div class="col-md-3"><label class="small fw-bold text-muted">离线表情</label><input type="text" name="off_e" class="form-control" value="{{g[5]}}"></div>
         </div>
-    </div>
+        <div class="mb-4">
+            <label class="small fw-bold text-muted mb-2">打卡成功消息 (支持富文本与链接)</label>
+            <div id="editor" style="height: 200px; background: #fff;">{{g[7]|safe}}</div>
+        </div>
+        <button type="button" onclick="ajaxSubmit('checkinForm', '/api/save')" class="btn btn-primary px-5 rounded-pill">保存设置</button>
+    </form>
 </div>
+<script>
+    window.quill = new Quill('#editor', {
+        theme: 'snow',
+        modules: { toolbar: [['bold', 'italic', 'underline', 'link'], [{'color': []}]] }
+    });
+</script>
 {% endblock %}
