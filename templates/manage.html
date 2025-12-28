@@ -1,113 +1,176 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>机器人全能后台</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>机器人管理后台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        body { background: #f8f9fa; }
-        .editor-box { min-height: 120px; border: 2px solid #dee2e6; padding: 15px; border-radius: 10px; background: #fff; outline: none; transition: 0.2s; }
-        .editor-box:focus { border-color: #0d6efd; box-shadow: 0 0 0 0.25rem rgba(13,110,253,0.1); }
-        .card { border: none; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-        .tag-btn { font-size: 0.75rem; border-radius: 20px; margin-right: 5px; margin-bottom: 5px; padding: 4px 12px; }
+        body { background-color: #f8f9fa; display: flex; min-height: 100vh; }
+        .sidebar { width: 250px; background: #2c3e50; color: white; position: fixed; height: 100%; padding-top: 20px; }
+        .sidebar a { color: #bdc3c7; text-decoration: none; padding: 12px 20px; display: block; }
+        .sidebar a:hover, .sidebar a.active { background: #34495e; color: white; }
+        .main-content { margin-left: 250px; flex: 1; padding: 30px; }
+        .card { border: none; border-radius: 12px; }
+        .editor-container { background: white; border-radius: 0 0 8px 8px; }
+        .ql-toolbar { background: #eee; border-radius: 8px 8px 0 0; }
+        .btn-var { margin-bottom: 5px; }
     </style>
 </head>
-<body class="py-4">
-    <div class="container" style="max-width: 900px;">
-        <div class="d-flex align-items-center mb-4">
-            <h3 class="fw-bold m-0 text-dark">🤖 机器人 Pro 配置中心</h3>
-        </div>
+<body>
 
-        <form action="/api/save" method="post" onsubmit="sync()">
-            <input type="hidden" name="sid" value="{{sid}}">
-            <input type="hidden" name="gid" value="{{gid}}">
+<div class="sidebar">
+    <div class="px-4 mb-4">
+        <h4 class="fw-bold"><i class="bi bi-robot"></i> Bot Admin</h4>
+        <small class="text-secondary">群组 ID: {{ gid }}</small>
+    </div>
+    <a href="#section-base" class="active"><i class="bi bi-gear-fill me-2"></i> 基础设置</a>
+    <a href="#section-users"><i class="bi bi-person-badge-fill me-2"></i> 认证老师管理</a>
+    <a href="#section-timers"><i class="bi bi-alarm-fill me-2"></i> 定时任务</a>
+</div>
+
+<div class="main-content">
+    
+    <section id="section-base" class="mb-5">
+        <h3 class="fw-bold mb-4">⚙️ 基础样式配置</h3>
+        <form action="/api/save" method="post" id="form-base">
+            <input type="hidden" name="sid" value="{{ sid }}">
+            <input type="hidden" name="gid" value="{{ gid }}">
             
-            <div class="card p-4 mb-4">
-                <div class="row g-3 mb-4">
-                    <div class="col-md-9">
-                        <label class="form-label small fw-bold text-muted">自定义属性 (用英文逗号隔开)</label>
-                        <input type="text" name="fields" class="form-control" value="{{group.custom_fields}}">
+            <div class="card p-4 shadow-sm">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">自定义字段 (英文逗号隔开)</label>
+                        <input type="text" name="fields" class="form-control" value="{{ group.custom_fields }}" placeholder="如：地区,价格,微信号">
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label small fw-bold text-muted text-center d-block">点赞表情</label>
-                        <input type="text" name="emoji" class="form-control text-center" value="{{group.like_emoji}}">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">打卡点赞图标</label>
+                        <input type="text" name="emoji" class="form-control" value="{{ group.like_emoji }}">
                     </div>
                 </div>
 
-                <div class="mb-4">
-                    <label class="form-label small fw-bold text-success">今日名单样式 (点击插入变量)</label>
-                    <div class="mb-2">
-                        <button type="button" class="btn btn-dark tag-btn" onclick="ins('ed-list','{姓名Value}')">姓名</button>
-                        {% if group and group.custom_fields %}
+                <div class="mb-3 mt-3 p-3 bg-light rounded border">
+                    <label class="form-label d-block small fw-bold text-primary">点击下方按钮快速插入变量：</label>
+                    <div class="d-flex flex-wrap gap-2" id="var-buttons">
+                        <button type="button" class="btn btn-sm btn-dark btn-var" onclick="insertVar('{姓名Value}')">{姓名}</button>
+                        <button type="button" class="btn btn-sm btn-info text-white btn-var" onclick="insertVar('{onlineEmoji}')">{状态图标}</button>
+                        {% if group.custom_fields %}
                             {% for f in group.custom_fields.split(',') %}
-                            <button type="button" class="btn btn-outline-primary tag-btn" onclick="ins('ed-list','{{'{'}}{{f}}Value{{'}'}}')">{{f}}</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary btn-var" onclick="insertVar('{{'{'}}{{f}}Value{{'}'}}')">{{f}}</button>
                             {% endfor %}
                         {% endif %}
                     </div>
-                    <div id="ed-list" class="editor-box" contenteditable="true">{{group.list_template|safe}}</div>
-                    <textarea name="list_t" id="h-list" style="display:none"></textarea>
                 </div>
 
-                <div class="mb-4">
-                    <label class="form-label small fw-bold text-primary">打卡回复消息</label>
-                    <div id="ed-check" class="editor-box" contenteditable="true">{{group.checkin_template|safe}}</div>
-                    <textarea name="check_t" id="h-check" style="display:none"></textarea>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">在线名单模板</label>
+                        <div id="editor-list" class="editor-container" style="height: 150px;">{{ group.list_template|safe }}</div>
+                        <input type="hidden" name="list_t" id="input-list">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">打卡成功回复</label>
+                        <div id="editor-check" class="editor-container" style="height: 150px;">{{ group.checkin_template|safe }}</div>
+                        <input type="hidden" name="check_t" id="input-check">
+                    </div>
                 </div>
-
-                <button class="btn btn-dark w-100 py-2 fw-bold shadow-sm">💾 保存并同步配置</button>
+                <button type="submit" class="btn btn-primary mt-3 w-100 py-2" onclick="syncEditors()">保存配置</button>
             </div>
         </form>
+    </section>
 
-        <div class="card p-4">
-            <h6 class="fw-bold mb-3">👨‍🏫 名单数据库</h6>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead class="table-light small">
-                        <tr><th>UID</th><th>姓名</th><th>详细数据 (JSON)</th><th>操作</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for u in users %}
-                        <tr>
-                            <form action="/api/user" method="post">
-                                <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                                <input type="hidden" name="action" value="save">
-                                <td><input type="text" name="user_id" class="form-control form-control-sm bg-light" value="{{u.user_id}}" readonly></td>
-                                <td><input type="text" name="name" class="form-control form-control-sm" value="{{u.name}}"></td>
-                                <td><input type="text" name="data" class="form-control form-control-sm" value="{{u.data_json}}"></td>
-                                <td>
-                                    <button class="btn btn-sm text-primary p-0 me-2">更新</button>
-                                    <button name="action" value="del" class="btn btn-sm text-danger p-0" onclick="return confirm('确定删除?')">删除</button>
-                                </td>
-                            </form>
-                        </tr>
-                        {% endfor %}
-                        <tr class="table-info">
-                            <form action="/api/user" method="post">
-                                <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                                <input type="hidden" name="action" value="save">
-                                <td><input type="text" name="user_id" class="form-control form-control-sm" placeholder="UID"></td>
-                                <td><input type="text" name="name" class="form-control form-control-sm" placeholder="姓名"></td>
-                                <td><input type="text" name="data" class="form-control form-control-sm" value='{"地区":"北京","价格":"500","联系链接":"https://t.me/xxx"}'></td>
-                                <td><button class="btn btn-sm btn-success w-100">添加</button></td>
-                            </form>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+    <section id="section-users" class="mb-5">
+        <h3 class="fw-bold mb-4">👤 认证老师库</h3>
+        <div class="card p-4 shadow-sm mb-4">
+            <form action="/api/user" method="post">
+                <input type="hidden" name="sid" value="{{ sid }}">
+                <input type="hidden" name="gid" value="{{ gid }}">
+                <input type="hidden" name="action" value="add">
+                <div class="row g-2">
+                    <div class="col-md-2"><input type="text" name="user_id" class="form-control" placeholder="UID" required></div>
+                    <div class="col-md-2"><input type="text" name="name" class="form-control" placeholder="姓名" required></div>
+                    <div class="col-md-6"><input type="text" name="data" class="form-control" placeholder='JSON数据：{"地区":"南山", "价格":"1000"}' required></div>
+                    <div class="col-md-2"><button type="submit" class="btn btn-success w-100">添加/更新</button></div>
+                </div>
+            </form>
         </div>
-    </div>
+        <div class="card shadow-sm overflow-hidden">
+            <table class="table table-hover mb-0">
+                <thead class="table-light"><tr><th>UID</th><th>姓名</th><th>详情数据</th><th>操作</th></tr></thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td><code>{{ u.user_id }}</code></td>
+                        <td>{{ u.name }}</td>
+                        <td class="small">{{ u.data_json }}</td>
+                        <td>
+                            <form action="/api/user" method="post" style="display:inline">
+                                <input type="hidden" name="sid" value="{{ sid }}"><input type="hidden" name="gid" value="{{ gid }}">
+                                <input type="hidden" name="user_id" value="{{ u.user_id }}"><input type="hidden" name="action" value="del">
+                                <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-    <script>
-        function ins(id, t) {
-            const el = document.getElementById(id);
-            el.focus();
-            document.execCommand('insertHTML', false, t + ' ');
-        }
-        function sync() {
-            document.getElementById('h-list').value = document.getElementById('ed-list').innerHTML;
-            document.getElementById('h-check').value = document.getElementById('ed-check').innerHTML;
-        }
-    </script>
+    <section id="section-timers" class="mb-5">
+        <h3 class="fw-bold mb-4">⏰ 定时多媒体发送</h3>
+        <div class="card p-4 shadow-sm mb-4">
+            <form action="/api/timer" method="post" id="form-timer">
+                <input type="hidden" name="sid" value="{{ sid }}"><input type="hidden" name="gid" value="{{ gid }}">
+                <input type="hidden" name="action" value="add">
+                <div class="row">
+                    <div class="col-md-3 mb-2"><input type="text" name="remark" class="form-control" placeholder="备注名称" required></div>
+                    <div class="col-md-3 mb-2"><select name="m_type" class="form-select"><option>纯文本</option><option>图片</option><option>视频</option></select></div>
+                    <div class="col-md-6 mb-2"><input type="text" name="m_url" class="form-control" placeholder="媒体链接 (图片/视频 URL)"></div>
+                    <div class="col-md-12 mb-2">
+                        <div id="editor-timer" style="height: 100px;">输入消息正文...</div>
+                        <input type="hidden" name="content" id="input-timer">
+                    </div>
+                    <div class="col-md-3 mb-2"><label class="small">频率(小时)</label><input type="number" name="hours" class="form-control" value="1"></div>
+                    <div class="col-md-3 mb-2"><label class="small">开始时间</label><input type="datetime-local" name="start" class="form-control"></div>
+                    <div class="col-md-3 mb-2"><label class="small">结束时间</label><input type="datetime-local" name="end" class="form-control"></div>
+                    <div class="col-md-3 mb-2"><label class="small">自动置顶</label><select name="is_pin" class="form-select"><option value="0">否</option><option value="1">是</option></select></div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 mt-2" onclick="syncTimerEditor()">添加定时任务</button>
+            </form>
+        </div>
+    </section>
+</div>
+
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<script>
+    // 初始化编辑器
+    var quillOptions = { theme: 'snow', modules: { toolbar: [['bold', 'italic', 'underline'], [{ 'color': [] }], ['clean']] } };
+    var quillList = new Quill('#editor-list', quillOptions);
+    var quillCheck = new Quill('#editor-check', quillOptions);
+    var quillTimer = new Quill('#editor-timer', quillOptions);
+
+    var currentFocusEditor = quillList;
+    quillList.on('selection-change', range => { if(range) currentFocusEditor = quillList; });
+    quillCheck.on('selection-change', range => { if(range) currentFocusEditor = quillCheck; });
+
+    // 插入占位符逻辑
+    function insertVar(val) {
+        const range = currentFocusEditor.getSelection(true);
+        currentFocusEditor.insertText(range.index, val + ' ');
+        currentFocusEditor.setSelection(range.index + val.length + 1);
+    }
+
+    function syncEditors() {
+        document.getElementById('input-list').value = quillList.root.innerHTML;
+        document.getElementById('input-check').value = quillCheck.root.innerHTML;
+    }
+
+    function syncTimerEditor() {
+        document.getElementById('input-timer').value = quillTimer.root.innerHTML;
+    }
+</script>
 </body>
 </html>
