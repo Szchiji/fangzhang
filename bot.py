@@ -4,7 +4,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import *
 from database import get_conn
 import asyncio
-from datetime import date
+from datetime import date, datetime, timedelta
 
 app = Client("fangzhang", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
