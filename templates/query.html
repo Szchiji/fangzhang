@@ -1,112 +1,76 @@
 {% extends "layout.html" %}
 {% block content %}
-<link href="https://cdn.bootcdn.net/ajax/libs/quill/1.3.6/quill.snow.css" rel="stylesheet">
-
-<div class="card p-4 border-0 shadow-sm" style="border-radius: 20px;">
+<div class="card-custom">
     <div class="d-flex align-items-center mb-4">
-        <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-3">
-            <i class="bi bi-chat-left-dots text-primary fs-4"></i>
-        </div>
-        <h5 class="fw-bold m-0">查询指令与模板富文本配置</h5>
+        <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-3"><i class="bi bi-chat-square-dots text-primary fs-4"></i></div>
+        <h5 class="fw-bold m-0">查询指令与模板配置</h5>
     </div>
 
     <div class="mb-4">
-        <label class="small fw-bold text-secondary mb-2">查询触发指令</label>
-        <input type="text" class="form-control border-0 bg-light py-2" value="{{g[9] or '查询'}}" 
-               style="border-radius: 10px;" onchange="updateField('query_cmd', this.value)">
+        <label class="small fw-bold text-secondary mb-2">触发指令</label>
+        <input type="text" class="form-control border-0 bg-light py-2 px-3 rounded-3" 
+               value="{{g[7] or '查询'}}" id="q_cmd" onchange="fastSave('cmd_query', this.value)">
     </div>
 
     <div class="mb-4">
-        <label class="small fw-bold text-secondary mb-3 d-block">在线人员列表模板 (富文本模式)</label>
-        
+        <label class="small fw-bold text-secondary mb-3 d-block">回复模板 (富文本模式)</label>
         <div class="d-flex flex-wrap gap-2 mb-3">
-            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="insertPlaceholder('{onlineEmoji}')">✨ 在线表情</button>
-            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="insertPlaceholder('{认证用户名字}')">👤 用户名字</button>
-            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="insertPlaceholder('{UID}')">🆔 UID</button>
-            <button class="btn btn-outline-danger btn-sm rounded-pill px-3" onclick="insertPlaceholder('{地区Value}')">📍 地区</button>
-            <button class="btn btn-outline-warning btn-sm rounded-pill px-3" onclick="insertPlaceholder('{老师名}')">🎴 老师名</button>
+            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="addTag('{onlineEmoji}')">✨ 在线表情</button>
+            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="addTag('{认证用户名字}')">👤 用户名字</button>
+            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="addTag('{UID}')">🆔 UID</button>
+            <button class="btn btn-outline-danger btn-sm rounded-pill px-3" onclick="addTag('{地区Value}')">📍 地区</button>
+            <button class="btn btn-outline-warning btn-sm rounded-pill px-3" onclick="addTag('{老师名}')">🎴 老师名</button>
         </div>
 
-        <div id="query-editor" style="height: 200px; background: white; border-radius: 0 0 12px 12px;">
-            {{g[10]|safe}}
-        </div>
+        <div id="q-editor" style="height: 250px; border-radius: 0 0 15px 15px;">{{g[8]|safe}}</div>
     </div>
 
-    <div class="p-4 rounded-4" style="background-color: #f8fafd; border: 2px dashed #e0e6ed;">
-        <div class="small text-secondary mb-3 d-flex align-items-center"><i class="bi bi-eye-fill me-2"></i> 实时预览：</div>
-        <div id="query_preview" class="small lh-lg"></div>
+    <div class="p-4 rounded-4" style="background: #f8fafd; border: 2px dashed #cbd5e1;">
+        <div class="small text-secondary mb-2"><i class="bi bi-eye me-1"></i> Telegram 预览效果：</div>
+        <div id="q-preview" class="small lh-base"></div>
     </div>
 
     <div class="text-end mt-4">
-        <button class="btn btn-primary px-5 py-2 rounded-pill fw-bold shadow" onclick="saveTemplate()">确认发布并保存</button>
+        <button class="btn btn-primary px-5 py-2 rounded-pill fw-bold shadow-sm" onclick="saveTpl()">确认发布</button>
     </div>
 </div>
 
-<script src="https://cdn.bootcdn.net/ajax/libs/quill/1.3.6/quill.min.js"></script>
 <script>
-let queryQuill;
-
-// 初始化编辑器
-document.addEventListener('DOMContentLoaded', function() {
-    queryQuill = new Quill('#query-editor', {
+let quill;
+document.addEventListener('DOMContentLoaded', () => {
+    quill = new Quill('#q-editor', {
         theme: 'snow',
-        modules: {
-            toolbar: [
-                ['bold', 'italic', 'underline'],
-                ['link', { 'color': [] }, { 'background': [] }],
-                ['clean']
-            ]
-        },
-        placeholder: '在此配置查询回复模板...'
+        modules: { toolbar: [['bold', 'italic', 'underline'], ['link', {'color':[]}], ['clean']] }
     });
-
-    // 监听内容变化同步预览
-    queryQuill.on('text-change', syncQueryPreview);
-    syncQueryPreview();
+    quill.on('text-change', renderPreview);
+    renderPreview();
 });
 
-// 关键功能：向富文本光标处插入占位符
-function insertPlaceholder(tag) {
-    const range = queryQuill.getSelection(true);
-    // 在光标处插入文字
-    queryQuill.insertText(range.index, tag, {
-        'color': '#0d6efd', // 给插入的标签一个高亮色，方便识别
-        'bold': true
-    });
-    // 移动光标到插入内容之后
-    queryQuill.setSelection(range.index + tag.length);
+function addTag(tag) {
+    const range = quill.getSelection(true);
+    quill.insertText(range.index, tag, {'bold': true, 'color': '#0d6efd'});
+    quill.setSelection(range.index + tag.length);
 }
 
-function syncQueryPreview() {
-    const html = queryQuill.root.innerHTML;
-    const box = document.getElementById('query_preview');
-    
-    const mock = (name, area) => html
-        .replace(/{onlineEmoji}/g, '✅')
-        .replace(/{认证用户名字}/g, name)
-        .replace(/{UID}/g, '888888')
-        .replace(/{地区Value}/g, ' - ' + area)
-        .replace(/{老师名}/g, '王老师');
-
-    box.innerHTML = `<div class="mb-1">${mock('张三', '台北')}</div><div>${mock('李四', '曼谷')}</div>`;
+function renderPreview() {
+    let html = quill.root.innerHTML;
+    const mock = (n, a) => html.replace(/{onlineEmoji}/g,'✅').replace(/{认证用户名字}/g,n).replace(/{UID}/g,'888').replace(/{地区Value}/g,a).replace(/{老师名}/g,'王老师');
+    document.getElementById('q-preview').innerHTML = `<div class="mb-1">${mock('张三','曼谷')}</div><div>${mock('李四','台北')}</div>`;
 }
 
-async function saveTemplate() {
-    const content = queryQuill.root.innerHTML;
-    await updateField('query_tpl', content);
-    alert("模板已更新");
-}
-
-async function updateField(f, v) {
+async function saveTpl() {
     const fd = new FormData();
-    fd.append('sid', '{{sid}}'); fd.append('gid', '{{gid}}');
+    fd.append('sid','{{sid}}'); fd.append('gid','{{gid}}');
+    fd.append('field','tpl_query'); fd.append('value', quill.root.innerHTML);
+    await fetch('/api/save_group', {method:'POST', body:fd});
+    alert("保存成功！");
+}
+
+async function fastSave(f, v) {
+    const fd = new FormData();
+    fd.append('sid','{{sid}}'); fd.append('gid','{{gid}}');
     fd.append('field', f); fd.append('value', v);
-    await fetch('/api/save', {method: 'POST', body: fd});
+    await fetch('/api/save_group', {method:'POST', body:fd});
 }
 </script>
-
-<style>
-    .ql-toolbar.ql-snow { border: 1px solid #f0f2f5 !important; background: #f8fafd; border-radius: 12px 12px 0 0; }
-    .ql-container.ql-snow { border: 1px solid #f0f2f5 !important; border-top: none !important; border-radius: 0 0 12px 12px; }
-</style>
 {% endblock %}
