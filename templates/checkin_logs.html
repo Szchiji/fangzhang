@@ -1,25 +1,35 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card p-4">
-    <h5 class="fw-bold mb-4">打卡系统配置</h5>
-    <form id="checkinForm">
-        <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-        <div class="row g-3 mb-4">
-            <div class="col-md-6"><label class="small fw-bold text-muted">打卡指令</label><input type="text" name="cmd" class="form-control" value="{{g[3]}}"></div>
-            <div class="col-md-3"><label class="small fw-bold text-muted">在线表情</label><input type="text" name="on_e" class="form-control" value="{{g[4]}}"></div>
-            <div class="col-md-3"><label class="small fw-bold text-muted">离线表情</label><input type="text" name="off_e" class="form-control" value="{{g[5]}}"></div>
+<div class="row justify-content-center mt-5">
+    <div class="col-md-8">
+        <div class="d-flex align-items-center mb-4">
+            <i class="bi bi-grid-1x2-fill fs-3 text-primary me-3"></i>
+            <h4 class="fw-bold m-0">选择要管理的群组</h4>
         </div>
-        <div class="mb-4">
-            <label class="small fw-bold text-muted mb-2">打卡成功消息 (支持富文本与链接)</label>
-            <div id="editor" style="height: 200px; background: #fff;">{{g[7]|safe}}</div>
+        <div class="row row-cols-1 row-cols-md-2 g-4">
+            {% for g in gs %}
+            <div class="col">
+                <div class="card h-100 p-4 border-0 shadow-sm hover-up" style="transition: 0.3s; cursor: pointer;" onclick="location.href='/manage?sid={{sid}}&gid={{g[0]}}&tab=basic'">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="fw-bold mb-1">{{ g[1] }}</h6>
+                            <code class="small text-muted">{{ g[0] }}</code>
+                        </div>
+                        <span class="badge bg-primary-soft text-primary p-2 rounded-circle">
+                            <i class="bi bi-arrow-right-short fs-5"></i>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% if not gs %}
+            <div class="col-12 text-center py-5">
+                <i class="bi bi-robot fs-1 text-muted"></i>
+                <p class="mt-3 text-muted">尚未加入任何群组，请先将机器人拉入群并设为管理员。</p>
+            </div>
+            {% endif %}
         </div>
-        <button type="button" onclick="ajaxSubmit('checkinForm', '/api/save')" class="btn btn-primary px-5 rounded-pill">保存设置</button>
-    </form>
+    </div>
 </div>
-<script>
-    window.quill = new Quill('#editor', {
-        theme: 'snow',
-        modules: { toolbar: [['bold', 'italic', 'underline', 'link'], [{'color': []}]] }
-    });
-</script>
+<style>.hover-up:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important; }</style>
 {% endblock %}
