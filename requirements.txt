@@ -1,5 +1,5 @@
-aiogram
 fastapi
-uvicorn
+uvicorn[standard]
+aiogram
 jinja2
 python-multipart
