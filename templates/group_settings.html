@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card shadow-sm border-0" style="border-radius: 15px;">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-gear-fill me-2 text-primary"></i>高级群组设置</h5>
+    </div>
+    <div class="card-body">
+        <form action="/update_settings" method="POST">
+            <input type="hidden" name="sid" value="{{ sid }}">
+            <input type="hidden" name="gid" value="{{ gid }}">
+            
+            <div class="mb-4">
+                <label class="form-label fw-bold">打卡回复模版</label>
+                <textarea name="checkin_template" class="form-control" rows="3" placeholder="例如：✅ {name} 打卡成功！累计 {count} 次">{{ group.checkin_template }}</textarea>
+                <div class="form-text">可用变量：{name} 用户名, {count} 总次数, {date} 日期</div>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label fw-bold">列表显示模版</label>
+                <textarea name="list_template" class="form-control" rows="3" placeholder="例如：ID:{id} | 状态: 正常">{{ group.list_template }}</textarea>
+                <div class="form-text">用于定义用户列表在 Telegram 中显示的格式</div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">自定义字段</label>
+                    <input type="text" name="fields" class="form-control" value="{{ group.custom_fields }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">默认表情</label>
+                    <input type="text" name="emoji" class="form-control" value="{{ group.like_emoji }}">
+                </div>
+            </div>
+
+            <hr>
+            <button type="submit" class="btn btn-primary px-4 py-2" style="border-radius: 10px;">
+                <i class="bi bi-save me-1"></i> 保存所有更改
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
