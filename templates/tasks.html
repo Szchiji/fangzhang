@@ -1,20 +1,22 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card p-4">
-    <div class="d-flex justify-content-between mb-4">
-        <h5 class="fw-bold">⏰ 定时计划消息</h5>
-        <button class="btn btn-primary rounded-pill" onclick="openT()">+ 创建新任务</button>
+<link href="https://cdn.bootcdn.net/ajax/libs/quill/1.3.6/quill.snow.css" rel="stylesheet">
+
+<div class="card p-4 border-0 shadow-sm" style="border-radius: 20px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="fw-bold m-0">🚀 发布富消息任务</h5>
+        <button class="btn btn-primary rounded-pill px-4" onclick="openTaskModal()">+ 新增定时</button>
     </div>
+
     <div class="row g-3">
         {% for t in tasks %}
         <div class="col-md-6" id="t-{{t[0]}}">
-            <div class="card bg-light p-3">
+            <div class="card bg-light p-3 border-0">
                 <div class="d-flex justify-content-between">
-                    <b>{{t[4]}}</b>
-                    <i class="bi bi-trash text-danger" onclick="delT('{{t[0]}}')" style="cursor:pointer"></i>
+                    <b class="text-dark">{{t[4]}}</b>
+                    <i class="bi bi-trash text-danger" style="cursor:pointer" onclick="delT('{{t[0]}}')"></i>
                 </div>
-                <div class="small text-muted text-truncate mt-1">{{t[2]|safe}}</div>
-                <div class="mt-2 small text-primary">间隔: {{t[3]}}分钟</div>
+                <div class="mt-2 small text-muted text-truncate">{{t[2]|safe}}</div>
             </div>
         </div>
         {% endfor %}
@@ -23,52 +25,86 @@
 
 <div class="modal fade" id="tModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content p-4">
-            <h6 class="fw-bold mb-3">创建定时富消息</h6>
-            <div class="mb-3"><label class="small fw-bold">任务名称</label><input type="text" id="t_remark" class="form-control"></div>
-            <div class="mb-3">
-                <label class="small fw-bold">内容 (支持加粗、图标等)</label>
-                <div id="vditor-box"></div>
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+            <div class="modal-body p-4">
+                <h6 class="fw-bold mb-4">配置富消息内容</h6>
+                
+                <div class="mb-3">
+                    <label class="small fw-bold mb-2">任务名称</label>
+                    <input type="text" id="t_remark" class="form-control bg-light border-0" placeholder="任务备注">
+                </div>
+
+                <div class="mb-3">
+                    <label class="small fw-bold mb-2">内容编辑 (对齐截图风格)</label>
+                    <div id="editor-container" style="height: 250px; background: #fff; border-radius: 0 0 12px 12px;"></div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="small fw-bold mb-2">发送频率 (分钟)</label>
+                    <input type="number" id="t_cron" class="form-control bg-light border-0" value="60">
+                </div>
+
+                <button class="btn btn-primary w-100 py-3 rounded-pill fw-bold shadow" onclick="saveTask()">确认发布任务</button>
             </div>
-            <div class="mb-3"><label class="small fw-bold">频率 (分钟)</label><input type="number" id="t_cron" class="form-control" value="60"></div>
-            <button class="btn btn-primary w-100 py-2 rounded-pill" onclick="saveTask()">保存计划</button>
         </div>
     </div>
 </div>
 
+<script src="https://cdn.bootcdn.net/ajax/libs/quill/1.3.6/quill.min.js"></script>
 <script>
-let v;
-const tModal = new bootstrap.Modal('#tModal');
+let quill;
+const modal = new bootstrap.Modal('#tModal');
 
-function openT() {
-    tModal.show();
-    // 核心修正：必须在弹窗显示完成后初始化编辑器，否则图标不加载
-    document.getElementById('tModal').addEventListener('shown.bs.modal', () => {
-        if(!v) {
-            v = new Vditor('vditor-box', {
-                height: 300,
-                toolbar: ['emoji','headings','bold','italic','strike','link','list','quote','code','fullscreen'],
-                cache: { enable: false },
-                after() { console.log('Vditor 渲染成功'); }
-            });
-        }
-    }, { once: true });
+function openTaskModal() {
+    modal.show();
+    // 弹窗开启后渲染编辑器
+    if(!quill) {
+        quill = new Quill('#editor-container', {
+            modules: {
+                toolbar: [
+                    ['bold', 'italic', 'underline', 'strike'],        // 加粗 斜体 下划线 删除线
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],    // 列表
+                    ['link', 'clean']                                // 链接、清除格式
+                ]
+            },
+            placeholder: '输入消息描述，支持富文本格式...',
+            theme: 'snow'
+        });
+    }
 }
 
 async function saveTask() {
     const fd = new FormData();
     fd.append('sid', '{{sid}}'); fd.append('gid', '{{gid}}');
     fd.append('remark', document.getElementById('t_remark').value);
-    fd.append('content', v.getHTML());
     fd.append('cron', document.getElementById('t_cron').value);
+    // 关键：导出 HTML 给机器人发送
+    fd.append('content', quill.root.innerHTML);
+
     await fetch('/api/add_task', { method: 'POST', body: fd });
     location.reload();
 }
 
 async function delT(tid) {
-    const fd = new FormData(); fd.append('sid', '{{sid}}'); fd.append('tid', tid);
+    if(!confirm("确定删除？")) return;
+    const fd = new FormData(); fd.append('sid','{{sid}}'); fd.append('tid',tid);
     await fetch('/api/del_task', { method: 'POST', body: fd });
     document.getElementById('t-'+tid).remove();
 }
 </script>
+
+<style>
+    /* 强制调整编辑器 UI，让它看起来更像你截图里的样子 */
+    .ql-toolbar.ql-snow {
+        border: none !important;
+        background: #f8fafd;
+        border-radius: 12px 12px 0 0;
+        padding: 10px;
+    }
+    .ql-container.ql-snow {
+        border: 1px solid #f0f2f5 !important;
+        border-top: none !important;
+    }
+    .ql-editor { font-size: 15px; color: #444; }
+</style>
 {% endblock %}
