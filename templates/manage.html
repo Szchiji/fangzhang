@@ -2,76 +2,94 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>机器人全能管理后台</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>机器人全能后台</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background: #f0f2f5; font-family: system-ui; }
-        .card { border-radius: 12px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .editor-box { min-height: 100px; border: 2px solid #e9ecef; padding: 12px; border-radius: 8px; background: #fff; outline: none; }
-        .editor-box:focus { border-color: #0d6efd; }
-        .btn-tag { font-size: 0.75rem; border-radius: 6px; margin-right: 4px; margin-bottom: 4px; }
+        body { background: #f8f9fa; }
+        .editor-box { min-height: 120px; border: 2px solid #dee2e6; padding: 15px; border-radius: 10px; background: #fff; outline: none; transition: 0.2s; }
+        .editor-box:focus { border-color: #0d6efd; box-shadow: 0 0 0 0.25rem rgba(13,110,253,0.1); }
+        .card { border: none; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .tag-btn { font-size: 0.75rem; border-radius: 20px; margin-right: 5px; margin-bottom: 5px; padding: 4px 12px; }
     </style>
 </head>
-<body class="py-5">
+<body class="py-4">
     <div class="container" style="max-width: 900px;">
-        <h4 class="mb-4 text-center fw-bold text-primary">🤖 机器人全能配置中心</h4>
+        <div class="d-flex align-items-center mb-4">
+            <h3 class="fw-bold m-0 text-dark">🤖 机器人 Pro 配置中心</h3>
+        </div>
 
         <form action="/api/save" method="post" onsubmit="sync()">
-            <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
+            <input type="hidden" name="sid" value="{{sid}}">
+            <input type="hidden" name="gid" value="{{gid}}">
+            
             <div class="card p-4 mb-4">
-                <h6 class="fw-bold mb-3">1. 基础配置</h6>
-                <div class="row g-3">
-                    <div class="col-md-9"><label class="small fw-bold">自定义属性 (用逗号隔开，如：地区,价格,课表,联系链接)</label><input type="text" name="fields" class="form-control" value="{{group.custom_fields}}"></div>
-                    <div class="col-md-3"><label class="small fw-bold">点赞表情</label><input type="text" name="emoji" class="form-control text-center" value="{{group.like_emoji}}"></div>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-9">
+                        <label class="form-label small fw-bold text-muted">自定义属性 (用英文逗号隔开)</label>
+                        <input type="text" name="fields" class="form-control" value="{{group.custom_fields}}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted text-center d-block">点赞表情</label>
+                        <input type="text" name="emoji" class="form-control text-center" value="{{group.like_emoji}}">
+                    </div>
                 </div>
-            </div>
 
-            <div class="card p-4 mb-4">
-                <h6 class="fw-bold mb-3">2. 消息模板自定义</h6>
                 <div class="mb-4">
-                    <label class="small fw-bold text-success">今日名单样式 (点击按钮插入占位符)</label>
+                    <label class="form-label small fw-bold text-success">今日名单样式 (点击插入变量)</label>
                     <div class="mb-2">
-                        <button type="button" class="btn btn-dark btn-tag" onclick="ins('ed-list','{姓名Value}')">姓名</button>
-                        {% for f in group.custom_fields.split(',') %}<button type="button" class="btn btn-info btn-tag text-white" onclick="ins('ed-list','{{'{'}}{{f}}Value{{'}'}}')">{{f}}</button>{% endfor %}
+                        <button type="button" class="btn btn-dark tag-btn" onclick="ins('ed-list','{姓名Value}')">姓名</button>
+                        {% if group and group.custom_fields %}
+                            {% for f in group.custom_fields.split(',') %}
+                            <button type="button" class="btn btn-outline-primary tag-btn" onclick="ins('ed-list','{{'{'}}{{f}}Value{{'}'}}')">{{f}}</button>
+                            {% endfor %}
+                        {% endif %}
                     </div>
                     <div id="ed-list" class="editor-box" contenteditable="true">{{group.list_template|safe}}</div>
                     <textarea name="list_t" id="h-list" style="display:none"></textarea>
                 </div>
-                <div class="mb-3">
-                    <label class="small fw-bold text-primary">打卡回复成功消息</label>
+
+                <div class="mb-4">
+                    <label class="form-label small fw-bold text-primary">打卡回复消息</label>
                     <div id="ed-check" class="editor-box" contenteditable="true">{{group.checkin_template|safe}}</div>
                     <textarea name="check_t" id="h-check" style="display:none"></textarea>
                 </div>
-                <button class="btn btn-primary w-100 py-2 fw-bold">🚀 保存并同步配置</button>
+
+                <button class="btn btn-dark w-100 py-2 fw-bold shadow-sm">💾 保存并同步配置</button>
             </div>
         </form>
 
         <div class="card p-4">
-            <h6 class="fw-bold mb-3">3. 老师名单数据库</h6>
+            <h6 class="fw-bold mb-3">👨‍🏫 名单数据库</h6>
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
-                    <thead class="table-light small"><tr><th>UID (必填)</th><th>姓名</th><th>详细数据 (JSON格式)</th><th>操作</th></tr></thead>
+                    <thead class="table-light small">
+                        <tr><th>UID</th><th>姓名</th><th>详细数据 (JSON)</th><th>操作</th></tr>
+                    </thead>
                     <tbody>
                         {% for u in users %}
                         <tr>
                             <form action="/api/user" method="post">
                                 <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
                                 <input type="hidden" name="action" value="save">
-                                <td><input type="text" name="user_id" class="form-control form-control-sm" value="{{u.user_id}}" readonly></td>
+                                <td><input type="text" name="user_id" class="form-control form-control-sm bg-light" value="{{u.user_id}}" readonly></td>
                                 <td><input type="text" name="name" class="form-control form-control-sm" value="{{u.name}}"></td>
                                 <td><input type="text" name="data" class="form-control form-control-sm" value="{{u.data_json}}"></td>
-                                <td><button class="btn btn-sm btn-link text-primary p-0 me-2">更新</button><button name="action" value="del" class="btn btn-sm btn-link text-danger p-0">删除</button></td>
+                                <td>
+                                    <button class="btn btn-sm text-primary p-0 me-2">更新</button>
+                                    <button name="action" value="del" class="btn btn-sm text-danger p-0" onclick="return confirm('确定删除?')">删除</button>
+                                </td>
                             </form>
                         </tr>
                         {% endfor %}
-                        <tr class="table-primary">
+                        <tr class="table-info">
                             <form action="/api/user" method="post">
                                 <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
                                 <input type="hidden" name="action" value="save">
                                 <td><input type="text" name="user_id" class="form-control form-control-sm" placeholder="UID"></td>
-                                <td><input type="text" name="name" class="form-control form-control-sm" placeholder="老师称呼"></td>
+                                <td><input type="text" name="name" class="form-control form-control-sm" placeholder="姓名"></td>
                                 <td><input type="text" name="data" class="form-control form-control-sm" value='{"地区":"北京","价格":"500","联系链接":"https://t.me/xxx"}'></td>
-                                <td><button class="btn btn-sm btn-success">添加老师</button></td>
+                                <td><button class="btn btn-sm btn-success w-100">添加</button></td>
                             </form>
                         </tr>
                     </tbody>
@@ -79,8 +97,13 @@
             </div>
         </div>
     </div>
+
     <script>
-        function ins(id, t) { const el = document.getElementById(id); el.focus(); document.execCommand('insertHTML', false, t + ' '); }
+        function ins(id, t) {
+            const el = document.getElementById(id);
+            el.focus();
+            document.execCommand('insertHTML', false, t + ' ');
+        }
         function sync() {
             document.getElementById('h-list').value = document.getElementById('ed-list').innerHTML;
             document.getElementById('h-check').value = document.getElementById('ed-check').innerHTML;
