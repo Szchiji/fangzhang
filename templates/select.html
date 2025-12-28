@@ -1,30 +1,50 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="container text-center mb-5">
-    <h3 class="fw-bold text-dark">🏢 机器人管理中心</h3>
-    <p class="text-muted">请选择您需要配置的群组或频道</p>
-</div>
-
-<div class="row row-cols-1 row-cols-md-3 g-4 justify-content-center">
-    {% for g in groups %}
-    <div class="col">
-        <div class="card h-100 transition-up">
-            <div class="card-body p-4 text-center">
-                <div class="bg-primary-subtle text-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
-                    <i class="bi bi-chat-left-text-fill fs-3"></i>
-                </div>
-                <h5 class="card-title fw-bold text-truncate">{{ g[1] }}</h5>
-                <p class="card-text small text-muted mb-4">ID: {{ g[0] }}</p>
-                <a href="/settings?sid={{ sid }}&gid={{ g[0] }}" class="btn btn-primary w-100 rounded-pill">
-                    进入管理中心 <i class="bi bi-arrow-right ms-1"></i>
-                </a>
+<div class="row justify-content-center mt-4">
+    <div class="col-lg-10">
+        <div class="d-flex align-items-center mb-4">
+            <div class="bg-primary text-white p-2 rounded-3 me-3">
+                <i class="bi bi-grid-1x2-fill fs-4"></i>
+            </div>
+            <div>
+                <h4 class="fw-bold m-0">请选择要管理的群组</h4>
+                <p class="text-muted small m-0">只有机器人加入并设为管理员的群组才会显示在此处</p>
             </div>
         </div>
-    </div>
-    {% endfor %}
-</div>
 
+        <div class="row row-cols-1 row-cols-md-2 g-4">
+            {% for g in gs %}
+            <div class="col">
+                <div class="card h-100 p-4 border-0 shadow-sm hover-up" 
+                     style="transition: 0.3s; cursor: pointer;" 
+                     onclick="location.href='/manage?sid={{sid}}&gid={{g[0]}}&tab=basic'">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle bg-light p-3 me-3">
+                                <i class="bi bi-chat-dots-fill text-primary"></i>
+                            </div>
+                            <div>
+                                <h6 class="fw-bold mb-0 text-dark">{{ g[1] or '未命名群组' }}</h6>
+                                <code class="small text-muted">{{ g[0] }}</code>
+                            </div>
+                        </div>
+                        <i class="bi bi-chevron-right text-muted"></i>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            
+            {% if not gs %}
+            <div class="col-12 text-center py-5">
+                <div class="text-muted mb-3"><i class="bi bi-robot" style="font-size: 4rem;"></i></div>
+                <h5 class="text-secondary">尚未发现可管理的群组</h5>
+                <p class="small text-muted">请先将机器人邀请进群并设为管理员，然后在群内发送一次消息。</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
 <style>
-    .transition-up:hover { transform: translateY(-5px); transition: 0.3s; }
+    .hover-up:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.08) !important; border-left: 4px solid var(--p-color) !important; }
 </style>
 {% endblock %}
