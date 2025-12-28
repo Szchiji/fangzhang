@@ -1,81 +1,14 @@
-{% extends "layout.html" %}
-{% block content %}
-<div class="card p-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h5 class="fw-bold m-0"><i class="bi bi-clock-history me-2"></i>定时发送管理</h5>
-        <button class="btn btn-primary btn-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#addTask">
-            <i class="bi bi-plus-lg me-1"></i> 新增计划
-        </button>
-    </div>
+<button type="button" onclick="ajaxSubmit('taskForm', '/api/add_task')" class="btn btn-primary">
+    立即启动计划
+</button>
 
-    <div class="table-responsive">
-        <table class="table table-hover align-middle small">
-            <thead class="table-light text-muted">
-                <tr>
-                    <th>编号</th><th>任务备注</th><th>周期</th><th>自动删除</th><th>状态</th><th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for t in tasks %}
-                <tr id="task-{{t[0]}}">
-                    <td><code>#{{ t[0][:6] }}</code></td>
-                    <td>{{ t[8] or '无备注' }}</td>
-                    <td><span class="badge bg-light text-dark">{{ t[6] }}</span></td>
-                    <td>{{ t[7] if t[7] != 'none' else '不删除' }}</td>
-                    <td><span class="badge bg-success-soft text-success">执行中</span></td>
-                    <td>
-                        <button class="btn btn-link text-danger p-0" onclick="deleteTask('{{t[0]}}')">删除</button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div class="modal fade" id="addTask" tabindex="-1">
-    <form id="taskForm" class="modal-dialog modal-lg">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header">
-                <h6 class="fw-bold m-0">创建定时计划</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                <div class="mb-3">
-                    <label class="small fw-bold">任务备注</label>
-                    <input type="text" name="remark" class="form-control" placeholder="仅后台可见，如：午夜推广">
-                </div>
-                <div class="mb-3">
-                    <label class="small fw-bold">发送内容</label>
-                    <div id="editor" style="height: 150px;"></div>
-                </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="small fw-bold">重复周期</label>
-                        <select name="repeat" class="form-select">
-                            <option value="once">不重复</option>
-                            <option value="3h">每 3 小时发送</option>
-                            <option value="12h">每天两次</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="small fw-bold">自动删除规则</label>
-                        <select name="delete_rule" class="form-select">
-                            <option value="none">永久保留</option>
-                            <option value="3h">发送 3 小时后自动撤回</option>
-                            <option value="next">下次发送前撤回</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer border-0">
-                <button type="button" onclick="ajaxSubmit('taskForm', '/api/add_task')" class="btn btn-primary w-100">确认启动</button>
-            </div>
-        </div>
-    </form>
-</div>
 <script>
-    window.quill = new Quill('#editor', { theme: 'snow', modules: { toolbar: [['bold', 'italic', 'link']] } });
+// 只要这个函数在 layout.html 里，所有页面都能用
+async function ajaxSubmit(formId, url) {
+    const fd = new FormData(document.getElementById(formId));
+    const res = await fetch(url, { method: 'POST', body: fd });
+    if(res.ok) {
+        showToast("✅ 操作已同步到机器人");
+    }
+}
 </script>
-{% endblock %}
