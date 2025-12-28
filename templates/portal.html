@@ -2,22 +2,33 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>选择群组</title>
+    <title>群组导航</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="bg-light p-4">
-    <div class="container" style="max-width:600px">
-        <h3 class="mb-4">📂 群组管理</h3>
-        <div class="list-group">
+<body class="bg-light">
+    <div class="container py-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>我的群组资产</h2>
+            <span class="badge bg-primary">管理模式</span>
+        </div>
+        <div class="row g-4">
             {% for g in groups %}
-            <a href="/manage?sid={{ sid }}&gid={{ g.group_id }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                <span>{{ g.group_name }}</span>
-                <span class="badge bg-primary rounded-pill">管理 ></span>
-            </a>
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body">
+                        <h5 class="card-title text-truncate">{{ g.group_name }}</h5>
+                        <p class="text-muted small">ID: {{ g.group_id }}</p>
+                        <a href="/manage?sid={{ sid }}&gid={{ g.group_id }}" class="btn btn-outline-primary w-100">
+                            进入管理后台
+                        </a>
+                    </div>
+                </div>
+            </div>
             {% endfor %}
             {% if not groups %}
-            <div class="alert alert-warning">暂无群组。请先把机器人拉进群，并随便发一条消息。</div>
+            <div class="col-12 text-center py-5">
+                <p class="text-muted">尚未检测到群组，请先将机器人拉入群组并任意发言。</p>
+            </div>
             {% endif %}
         </div>
     </div>
