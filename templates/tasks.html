@@ -1,23 +1,21 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card p-4 border-0 shadow-sm">
-    <div class="d-flex justify-content-between mb-4 align-items-center">
-        <h5 class="fw-bold m-0">定时消息计划</h5>
-        <button class="btn btn-primary rounded-pill px-4" onclick="openT()"><i class="bi bi-send-plus me-1"></i>创建新计划</button>
-    </div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vditor/dist/index.css" />
+<script src="https://cdn.jsdelivr.net/npm/vditor/dist/index.min.js"></script>
 
+<div class="card p-4 border-0 shadow-sm">
+    <div class="d-flex justify-content-between mb-4">
+        <h5 class="fw-bold m-0"><i class="bi bi-clock-history me-2"></i>定时任务</h5>
+        <button class="btn btn-primary rounded-pill px-4" onclick="openT()"><i class="bi bi-plus-lg"></i> 创建计划</button>
+    </div>
+    
     <div class="row g-3">
         {% for t in tasks %}
         <div class="col-md-6">
-            <div class="card bg-light border-0 p-3 h-100">
-                <div class="d-flex justify-content-between">
-                    <h6 class="fw-bold">{{t[5]}}</h6>
-                    <span class="badge bg-white text-primary border">{{t[3]}}分/次</span>
-                </div>
-                <div class="small text-muted text-truncate mt-2">{{t[2]|safe}}</div>
-                <div class="mt-3 text-end">
-                    <button class="btn btn-sm btn-link text-danger" onclick="delT('{{t[0]}}')">删除任务</button>
-                </div>
+            <div class="card bg-light border-0 p-3">
+                <div class="fw-bold">{{t[4]}}</div>
+                <div class="small text-muted mt-2 text-truncate">{{t[2]|safe}}</div>
+                <div class="mt-3"><button class="btn btn-sm btn-link text-danger p-0" onclick="delT('{{t[0]}}')">删除</button></div>
             </div>
         </div>
         {% endfor %}
@@ -28,28 +26,39 @@
     <div class="modal-dialog modal-lg">
         <form id="tForm" class="modal-content border-0">
             <div class="modal-body p-4">
-                <h6 class="fw-bold mb-4">配置定时消息</h6>
-                <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
-                <div class="mb-3"><label class="small fw-bold">任务备注</label><input type="text" name="remark" class="form-control" required></div>
-                <div class="row mb-3">
-                    <div class="col-6"><label class="small fw-bold">消息类型</label><select name="m_type" class="form-select" onchange="toggleM(this.value)"><option value="text">纯文本</option><option value="photo">图片消息</option><option value="video">视频消息</option></select></div>
-                    <div class="col-6" id="m_url_wrap" style="display:none"><label class="small fw-bold">媒体 URL</label><input type="text" name="m_url" class="form-control"></div>
+                <h6 class="fw-bold mb-4">配置富消息任务</h6>
+                <div class="mb-3"><label class="small fw-bold">任务备注</label><input type="text" name="remark" class="form-control" placeholder="输入任务名称"></div>
+                <div class="mb-3">
+                    <label class="small fw-bold">消息内容</label>
+                    <div id="vditor"></div>
+                    <input type="hidden" name="content" id="t_content">
                 </div>
-                <div class="mb-3"><label class="small fw-bold">消息内容</label><div id="editor" style="height:120px" class="bg-white"></div><input type="hidden" name="content" id="t_content"></div>
-                <div class="mb-3"><label class="small fw-bold">底部按钮 (格式: 按钮文字|链接)</label><textarea name="btn" class="form-control" rows="2" placeholder="咨询老师|https://t.me/xxx"></textarea></div>
                 <div class="mb-4"><label class="small fw-bold">发送间隔 (分钟)</label><input type="number" name="cron" class="form-control" value="60"></div>
-                <button type="button" onclick="saveT()" class="btn btn-primary w-100 py-2 rounded-pill">立即启动任务</button>
+                <button type="button" onclick="saveT()" class="btn btn-primary w-100 py-3 rounded-pill shadow">确认发布任务</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-const quill = new Quill('#editor', { theme: 'snow' });
+let v;
 const tm = new bootstrap.Modal(document.getElementById('tModal'));
-function openT() { tm.show(); }
-function toggleM(v) { document.getElementById('m_url_wrap').style.display = (v=='text'?'none':'block'); }
-async function saveT() { document.getElementById('t_content').value = quill.root.innerHTML; await fetch('/api/add_task',{method:'POST', body:new FormData(document.getElementById('tForm'))}); location.reload(); }
-async function delT(id) { if(confirm('删除?')) { const fd=new FormData(); fd.append('sid','{{sid}}'); fd.append('tid',id); await fetch('/api/del_task',{method:'POST',body:fd}); location.reload(); } }
+function openT() { 
+    tm.show(); 
+    setTimeout(() => {
+        v = new Vditor('vditor', {
+            height: 300,
+            placeholder: '输入图片描述，可以不填...',
+            toolbar: ['emoji', 'bold', 'italic', 'link', 'quote', 'code', 'insert-after', 'fullscreen']
+        });
+    }, 300);
+}
+async function saveT() {
+    document.getElementById('t_content').value = v.getHTML();
+    const fd = new FormData(document.getElementById('tForm'));
+    fd.append('sid', '{{sid}}'); fd.append('gid', '{{gid}}');
+    await fetch('/api/add_task', {method:'POST', body:fd});
+    location.reload();
+}
 </script>
 {% endblock %}
