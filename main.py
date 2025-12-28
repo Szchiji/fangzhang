@@ -11,13 +11,13 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import uvicorn
 
-# --- 1. 基础配置 ---
+# --- 配置 ---
 TOKEN = os.getenv("TOKEN")
 ADMIN_IDS = [x.strip() for x in os.getenv("ADMIN_IDS", "").split(',') if x.strip()]
 PORT = int(os.getenv("PORT", 8080))
 DOMAIN = os.getenv("RAILWAY_STATIC_URL", "localhost:8080").rstrip('/')
 if not DOMAIN.startswith('http'): DOMAIN = f"https://{DOMAIN}"
-DB_PATH = os.getenv("DB_PATH", "/data/bot_perfect.db")
+DB_PATH = os.getenv("DB_PATH", "/data/bot_v8.db")
 os.makedirs("/data", exist_ok=True)
 
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
@@ -26,12 +26,11 @@ templates = Jinja2Templates(directory="templates")
 scheduler = AsyncIOScheduler()
 auth_sessions = {}
 
-# --- 2. 数据库引擎 ---
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS groups (group_id TEXT PRIMARY KEY, group_name TEXT, is_on INT DEFAULT 1, check_cmd TEXT DEFAULT '打卡', on_emoji TEXT DEFAULT '✅', off_emoji TEXT DEFAULT '❌', off_cmd TEXT DEFAULT '休息', msg_on TEXT, msg_off TEXT, query_cmd TEXT DEFAULT '查询', query_tpl TEXT)''')
         conn.execute('''CREATE TABLE IF NOT EXISTS verified_users (user_id TEXT, group_id TEXT, name TEXT, status TEXT, area TEXT, teacher TEXT, last_time TEXT, expire_at TEXT, PRIMARY KEY(user_id, group_id))''')
-        conn.execute('''CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, gid TEXT, content TEXT, cron INT, remark TEXT, m_type TEXT, m_url TEXT, btn TEXT)''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, gid TEXT, content TEXT, cron INT, remark TEXT)''')
         conn.commit()
 
 def db_exec(sql, params=()):
@@ -43,48 +42,21 @@ def db_query(sql, params=(), one=False):
         cursor = conn.execute(sql, params)
         return cursor.fetchone() if one else cursor.fetchall()
 
-# --- 3. 占位符解析引擎 ---
-def parse_msg(tpl, u, gname):
-    if not tpl: return ""
-    mapping = {"{名字}": u[2], "{地区}": u[4] or "未填", "{老师}": u[5] or "未填", "{时间}": u[6] or datetime.now().strftime("%H:%M"), "{群组}": gname, "{到期时间}": u[7] or "永久", "{用户ID}": u[0]}
-    for k, v in mapping.items(): tpl = tpl.replace(k, str(v))
-    return tpl
-
-# --- 4. 机器人逻辑 ---
+# --- 机器人管理权限 ---
 @dp.message(Command("start"))
 async def cmd_start(msg: types.Message):
     if str(msg.from_user.id) not in ADMIN_IDS: return
     sid = str(uuid.uuid4())
     auth_sessions[sid] = msg.from_user.id
-    kb = InlineKeyboardBuilder().button(text="🏢 控制中枢", url=f"{DOMAIN}/manage?sid={sid}").as_markup()
-    await msg.reply(f"<b>权限确认成功</b>", reply_markup=kb)
+    kb = InlineKeyboardBuilder().button(text="🖥️ 进入管理后台", url=f"{DOMAIN}/manage?sid={sid}").as_markup()
+    await msg.reply(f"<b>7哥，欢迎回来！</b>\n管理链接已生成，点击下方按钮进入：", reply_markup=kb)
 
-@dp.message(F.chat.type.in_({"group", "supergroup"}))
-async def handle_group_msg(msg: types.Message):
-    gid, uid, text = str(msg.chat.id), str(msg.from_user.id), msg.text or ""
-    db_exec("INSERT OR IGNORE INTO groups (group_id, group_name) VALUES (?, ?)", (gid, msg.chat.title))
-    g = db_query("SELECT * FROM groups WHERE group_id=?", (gid,), True)
-    if not g: return
-    
-    if text == g[3]: # 打卡
-        u = db_query("SELECT * FROM verified_users WHERE user_id=? AND group_id=?", (uid, gid), True)
-        if not u: return
-        if u[7] and datetime.strptime(u[7], "%Y-%m-%d") < datetime.now(): return await msg.reply("❌ 认证已过期")
-        t = datetime.now().strftime("%H:%M")
-        db_exec("UPDATE verified_users SET status='online', last_time=? WHERE user_id=? AND group_id=?", (t, uid, gid))
-        await msg.reply(parse_msg(g[7] or "{名字} 已上岗", u, g[1]))
-    elif text == g[9]: # 查询
-        online = db_query("SELECT * FROM verified_users WHERE group_id=? AND status='online'", (gid,))
-        if not online: return await msg.reply("📊 无人在线")
-        res = [parse_msg(g[10] or "· {名字}", u, g[1]) for u in online]
-        await msg.reply(f"📊 <b>{g[1]} 在线列表</b>\n\n" + "\n".join(res))
-
-# --- 5. Web API 接口 ---
+# --- 核心 API ---
 app = FastAPI()
 
 @app.get("/manage", response_class=HTMLResponse)
 async def router_page(request: Request, sid: str, gid: str = None, tab: str = "basic"):
-    if sid not in auth_sessions: return HTMLResponse("验证失效")
+    if sid not in auth_sessions: return HTMLResponse("验证超时，请重新在机器人发送 /start")
     if not gid:
         gs = db_query("SELECT group_id, group_name FROM groups")
         return templates.TemplateResponse("select.html", {"request": request, "sid": sid, "gs": gs})
@@ -109,7 +81,7 @@ async def api_add_user(sid: str = Form(...), gid: str = Form(...), user_id: str 
 async def api_add_task(sid: str = Form(...), gid: str = Form(...), remark: str = Form(...), content: str = Form(...), cron: int = Form(...)):
     if sid not in auth_sessions: return JSONResponse({"status":"err"}, 403)
     tid = str(uuid.uuid4())[:8]
-    db_exec("INSERT INTO tasks (id, gid, content, cron, remark) VALUES (?,?,?,?,?)", (tid, gid, content, cron, remark))
+    db_exec("INSERT INTO tasks VALUES (?,?,?,?,?)", (tid, gid, content, cron, remark))
     return {"status": "ok"}
 
 @app.post("/api/del_task")
