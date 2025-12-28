@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="fw-bold m-0"><i class="bi bi-people-fill me-2 text-primary"></i>认证用户管理</h5>
+        <button class="btn btn-primary btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#addUser">
+            <i class="bi bi-person-plus me-1"></i> 新增认证
+        </button>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="bg-light">
+                <tr class="small text-muted">
+                    <th>用户 UID</th><th>显示姓名</th><th>状态</th><th>最后活跃</th><th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr id="user-row-{{u[0]}}">
+                    <td><code>{{u[0]}}</code></td>
+                    <td class="fw-bold">{{u[2]}}</td>
+                    <td>
+                        {% if u[3] == 'online' %}
+                        <span class="badge rounded-pill bg-success-soft text-success">● 在线</span>
+                        {% else %}
+                        <span class="badge rounded-pill bg-light text-muted">○ 休息</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted">{{u[4] or '尚未打卡'}}</td>
+                    <td>
+                        <button class="btn btn-link text-danger p-0 text-decoration-none" onclick="deleteUser('{{u[0]}}')">
+                            <i class="bi bi-trash3"></i> 移除
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="addUser" tabindex="-1">
+    <form id="userForm" class="modal-dialog">
+        <div class="modal-content border-0">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="fw-bold m-0">手动录入认证用户</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="sid" value="{{sid}}"><input type="hidden" name="gid" value="{{gid}}">
+                <div class="alert alert-info py-2 small mb-3">
+                    💡 提示：转发用户消息给机器人可自动获取 UID。
+                </div>
+                <div class="mb-3">
+                    <label class="small fw-bold">数字 UID</label>
+                    <input type="text" name="user_id" class="form-control" placeholder="例如: 12345678" required>
+                </div>
+                <div class="mb-3">
+                    <label class="small fw-bold">备注姓名</label>
+                    <input type="text" name="name" class="form-control" placeholder="用于打卡显示" required>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" onclick="handleUserAdd()" class="btn btn-primary w-100 rounded-pill">保存并返回列表</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+async function handleUserAdd() {
+    await ajaxSubmit('userForm', '/api/add_user');
+    setTimeout(() => location.reload(), 1000); // 录入新用户后 1 秒刷新查看结果
+}
+
+async function deleteUser(uid) {
+    if(!confirm('确定要移除该用户的打卡权限吗？')) return;
+    const fd = new FormData();
+    fd.append('user_id', uid); fd.append('gid', '{{gid}}'); fd.append('sid', '{{sid}}');
+    const res = await fetch('/api/delete_user', { method: 'POST', body: fd });
+    if(res.ok) {
+        showToast("🗑️ 认证已解除");
+        document.getElementById(`user-row-${uid}`).classList.add('fade-out');
+        setTimeout(() => document.getElementById(`user-row-${uid}`).remove(), 300);
+    }
+}
+</script>
+<style>.bg-success-soft { background: #dcfce7; } .fade-out { opacity: 0; transform: translateX(20px); transition: 0.3s; }</style>
+{% endblock %}
