@@ -20,26 +20,29 @@ DB_PATH = "/data/bot.db"
 os.makedirs("/data", exist_ok=True)
 logging.basicConfig(level=logging.INFO)
 
-# --- 核心渲染函数：支持 {xxxValue} 占位符 ---
+# --- 核心渲染引擎：处理占位符与 HTML 清理 ---
 def safe_format(template, data):
+    # 构建带 Value 后缀的字典
     render_data = {f"{k}Value": v for k, v in data.items()}
     render_data["onlineEmoji"] = data.get("onlineEmoji", "✅")
     render_data["老师名字Value"] = data.get("name", "")
     
-    # 清理原生编辑器可能产生的标签和转义字符
-    template = template.replace('&nbsp;', ' ').replace('&amp;', '&').replace('<div>', '').replace('</div>', '\n')
+    # 清理原生编辑器 HTML 标签，确保 Telegram 兼容
+    # 将 <div> 替换为换行，清理多余转义
+    template = template.replace('&nbsp;', ' ').replace('&amp;', '&')
+    template = template.replace('<div>', '').replace('</div>', '\n').replace('<br>', '\n').replace('<p>', '').replace('</p>', '\n')
     
     def replace(match):
         key = match.group(1)
         return str(render_data.get(key, ""))
         
-    return re.sub(r'\{(\w+)\}', replace, template)
+    return re.sub(r'\{(\w+)\}', replace, template).strip()
 
 def json_loads_filter(value):
     try: return json.loads(value) if value else {}
     except: return {}
 
-# --- 初始化 ---
+# --- 初始化组件 ---
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 app = FastAPI()
@@ -52,10 +55,12 @@ def get_db():
 
 def init_db():
     with get_db() as conn:
+        # 核心数据库表结构
         conn.execute('''CREATE TABLE IF NOT EXISTS groups (
             group_id TEXT PRIMARY KEY, group_name TEXT, 
             like_emoji TEXT DEFAULT '👍', 
             list_template TEXT DEFAULT '{onlineEmoji} {地区Value} <a href="{联系方式Value}">{老师名字Value}</a>',
+            checkin_template TEXT DEFAULT '✅ 【{老师名字Value}】上线成功！',
             custom_fields TEXT DEFAULT '地区,价位,联系方式')''')
         conn.execute('''CREATE TABLE IF NOT EXISTS verified_users (
             user_id TEXT, group_id TEXT, name TEXT, 
@@ -78,36 +83,48 @@ async def group_handler(msg: types.Message):
             group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
         user = conn.execute("SELECT * FROM verified_users WHERE user_id=? AND group_id=?", (uid, gid)).fetchone()
 
-    # 1. 自动点赞 (解决不点赞问题)
-    if user and msg.text not in ["打卡", "今日名单"]:
-        try: await msg.react([ReactionTypeEmoji(emoji=group['like_emoji'])])
-        except: pass
+    # 1. 自动点赞
+    if user and msg.text not in ["打卡", "今日名单", "今日榨汁"]:
+        if user['expire_at'] == 0 or user['expire_at'] > time.time():
+            try: await msg.react([ReactionTypeEmoji(emoji=group['like_emoji'] or "👍")])
+            except: pass
 
-    # 2. 名单展示 (解决占位符失效)
+    # 2. 老师打卡 (自定义回复模板)
+    if msg.text == "打卡" and user:
+        with get_db() as conn:
+            conn.execute("INSERT OR IGNORE INTO checkins VALUES (?,?,?)", (uid, gid, today))
+            conn.commit()
+        attr = json.loads(user['data_json']); attr['name'] = user['name']
+        welcome_text = safe_format(group['checkin_template'], attr)
+        await msg.reply(welcome_text)
+
+    # 3. 今日名单展示 (支持超链接跳转)
     if msg.text in ["今日名单", "今日榨汁"]:
         with get_db() as conn:
             users = conn.execute('''SELECT v.* FROM verified_users v JOIN checkins c ON v.user_id = c.user_id 
                                  AND v.group_id = c.group_id WHERE v.group_id=? AND c.checkin_date=? 
                                  ORDER BY v.sort_order DESC''', (gid, today)).fetchall()
-        if not users: return await msg.answer("📅 暂时无人在线")
-        res = f"<b>📅 {msg.chat.title} 名单</b>\n\n"
+        if not users: return await msg.answer("📅 暂时没有在线老师。")
+        
+        res = f"<b>📅 {msg.chat.title} 在线名单</b>\n\n"
         for u in users:
             attr = json.loads(u['data_json']); attr['name'] = u['name']
             res += safe_format(group['list_template'], attr) + "\n"
-        await msg.answer(res, parse_mode="HTML")
+        await msg.answer(res, disable_web_page_preview=True)
 
-# --- 后台接口 ---
+# --- 后台接口 (仅保留核心逻辑) ---
 @app.get("/manage", response_class=HTMLResponse)
 async def manage(request: Request, sid: str, gid: str):
+    # 这里应有鉴权逻辑
     with get_db() as conn:
         group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
-        users = conn.execute("SELECT * FROM verified_users WHERE group_id=?", (gid,)).fetchall()
+        users = conn.execute("SELECT * FROM verified_users WHERE group_id=? ORDER BY sort_order DESC", (gid,)).fetchall()
     return templates.TemplateResponse("manage.html", {"request": request, "sid": sid, "gid": gid, "group": group, "users": users, "now": int(time.time())})
 
 @app.post("/api/save_config")
-async def save_config(sid: str=Form(...), gid: str=Form(...), like_emoji: str=Form(...), list_template: str=Form(...), custom_fields: str=Form(...)):
+async def save_config(sid: str=Form(...), gid: str=Form(...), like_emoji: str=Form(...), list_template: str=Form(...), checkin_template: str=Form(...), custom_fields: str=Form(...)):
     with get_db() as conn:
-        conn.execute("UPDATE groups SET like_emoji=?, list_template=?, custom_fields=? WHERE group_id=?", (like_emoji, list_template, custom_fields, gid))
+        conn.execute("UPDATE groups SET like_emoji=?, list_template=?, checkin_template=?, custom_fields=? WHERE group_id=?", (like_emoji, list_template, checkin_template, custom_fields, gid))
         conn.commit()
     return RedirectResponse(f"/manage?sid={sid}&gid={gid}", status_code=303)
 
