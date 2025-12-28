@@ -1,137 +1,94 @@
-import os, asyncio, sqlite3, uuid, logging, time, json, re
-from datetime import datetime
+import os, asyncio, sqlite3, uuid, json
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from aiogram import Bot, Dispatcher, types, F
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.client.default import DefaultBotProperties
 
-# --- 基础配置 ---
-TOKEN = os.getenv("BOT_TOKEN")
-DOMAIN = os.getenv("RAILWAY_STATIC_URL", "localhost:8080").rstrip('/')
-if not DOMAIN.startswith('http'): DOMAIN = f"https://{DOMAIN}"
-
-DB_PATH = "/data/bot.db"
-os.makedirs("/data", exist_ok=True)
+# --- 1. 基础配置 (Railway 变量名请确保一致) ---
+TOKEN = os.getenv("TOKEN")
+DB_PATH = "/data/bot_pro.db"
 
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
-auth_sessions = {}
 
-# --- 数据库核心 ---
-def get_db():
-    conn = sqlite3.connect(DB_PATH); conn.row_factory = sqlite3.Row
-    return conn
+# 确保你的 templates 文件夹下有 layout.html, users.html, config.html 等
+templates = Jinja2Templates(directory="templates")
+
+# --- 2. 数据库工具函数 ---
+def db_exec(sql, params=()):
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(sql, params)
+        conn.commit()
+
+def db_query(sql, params=()):
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        return conn.execute(sql, params).fetchall()
 
 def init_db():
-    with get_db() as conn:
-        conn.execute('''CREATE TABLE IF NOT EXISTS groups (
-            group_id TEXT PRIMARY KEY, like_emoji TEXT DEFAULT '👍',
-            custom_fields TEXT DEFAULT '地区,价格,链接',
-            list_template TEXT DEFAULT '✅ <b>[{地区Value}]</b> {姓名Value}',
-            checkin_template TEXT DEFAULT '✨ {姓名Value} 已上线！')''')
-        conn.execute('''CREATE TABLE IF NOT EXISTS verified_users (
-            user_id TEXT, group_id TEXT, name TEXT, data_json TEXT, 
-            PRIMARY KEY(user_id, group_id))''')
-        conn.execute('''CREATE TABLE IF NOT EXISTS checkins (
-            user_id TEXT, group_id TEXT, checkin_date TEXT, 
-            PRIMARY KEY(user_id, group_id, checkin_date))''')
-        conn.execute('''CREATE TABLE IF NOT EXISTS timers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, group_id TEXT, remark TEXT, 
-            content TEXT, media_type TEXT, media_url TEXT, interval_hours INTEGER, 
-            start_time TEXT, end_time TEXT, is_pin INTEGER DEFAULT 0, 
-            last_run TEXT, status INTEGER DEFAULT 1)''')
-        conn.commit()
+    os.makedirs("/data", exist_ok=True)
+    # settings 表存所有侧边工具的配置 (K-V 结构)
+    db_exec("CREATE TABLE IF NOT EXISTS settings (gid TEXT, key TEXT, value TEXT, PRIMARY KEY(gid, key))")
+    # groups 表记录机器人加入的群
+    db_exec("CREATE TABLE IF NOT EXISTS groups (gid TEXT PRIMARY KEY, gname TEXT)")
 
-# --- 占位符解析渲染 (修复 HTML 兼容) ---
-def power_render(template, data_json, name):
-    try: data = json.loads(data_json or "{}")
-    except: data = {}
-    data.update({"姓名": name, "onlineEmoji": "✅"})
-    
-    # 1. 转换富文本换行
-    text = template.replace('</p><p>', '\n').replace('</p>', '\n').replace('<p>', '').replace('<br>', '\n')
-    
-    # 2. 占位符替换
-    def replace_match(match):
-        key = match.group(1).replace('Value', '')
-        return str(data.get(key, match.group(0)))
-    
-    final_text = re.sub(r'\{(\w+)\}', replace_match, text)
-    # 3. 仅保留 TG 支持的标签，清理 Quill 冗余标签
-    clean_text = re.sub(r'<(?!b|i|u|code|a|s|strong|em)[^>]+>', '', final_text)
-    return clean_text.strip()
-
-# --- 机器人逻辑 ---
+# --- 3. 机器人逻辑：自动识别群组 ---
 @dp.message(Command("start"))
 async def cmd_start(msg: types.Message):
-    sid = str(uuid.uuid4())
-    auth_sessions[sid] = {"gid": str(msg.chat.id), "exp": time.time() + 3600}
+    # 生成一个临时的进入链接
+    gid = str(msg.chat.id)
+    # 记录群组信息
+    db_exec("INSERT OR IGNORE INTO groups VALUES (?, ?)", (gid, msg.chat.title or "私聊"))
+    
     from aiogram.utils.keyboard import InlineKeyboardBuilder
-    kb = InlineKeyboardBuilder().button(text="🔐 进入后台管理", url=f"{DOMAIN}/manage?sid={sid}&gid={msg.chat.id}").as_markup()
-    await msg.answer(f"👤 UID: <code>{msg.from_user.id}</code>\n请点击下方按钮管理：", reply_markup=kb)
+    # 这里的链接你可以根据你的域名微调
+    kb = InlineKeyboardBuilder().button(text="🖥️ 打开管理后台", url=f"https://{os.getenv('RAILWAY_STATIC_URL')}/manage?gid={gid}&tab=users").as_markup()
+    await msg.answer("<b>7哥，中控系统已就绪</b>\n请点击下方按钮进入：", reply_markup=kb)
 
 @dp.message()
-async def bot_handler(msg: types.Message):
-    if not msg.text: return
-    gid, uid, today = str(msg.chat.id), str(msg.from_user.id), datetime.now().strftime('%Y-%m-%d')
-    with get_db() as conn:
-        group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
-        user = conn.execute("SELECT * FROM verified_users WHERE user_id=? AND group_id=?", (uid, gid)).fetchone()
+async def handle_msg(msg: types.Message):
+    # 机器人实时读取网页设置的示例逻辑
+    gid = str(msg.chat.id)
+    uid = str(msg.from_user.id)
     
-    if not group: return
-
-    if "打卡" in msg.text and user:
-        with get_db() as conn:
-            conn.execute("INSERT OR IGNORE INTO checkins VALUES (?,?,?)", (uid, gid, today))
-            conn.commit()
-        await msg.reply(power_render(group['checkin_template'], user['data_json'], user['name']))
-        try: await bot.set_message_reaction(gid, msg.message_id, [types.ReactionTypeEmoji(emoji=group['like_emoji'])])
-        except: pass
+    # 比如：检查该用户是否在网页的“认证用户”里
+    user_key = f"u_{uid}"
+    res = db_query("SELECT value FROM settings WHERE gid=? AND key=?", (gid, user_id))
     
-    elif any(k in msg.text for k in ["名单", "在线"]):
-        with get_db() as conn:
-            rows = conn.execute('''SELECT v.* FROM verified_users v JOIN checkins c ON v.user_id = c.user_id 
-                                AND v.group_id = c.group_id WHERE v.group_id=? AND c.checkin_date=?''', (gid, today)).fetchall()
-        if not rows: return await msg.answer("📅 暂时无人打卡上线")
-        res = f"<b>📅 今日在线名单 ({today})</b>\n\n"
-        for r in rows: res += power_render(group['list_template'], r['data_json'], r['name']) + "\n"
-        await msg.answer(res, disable_web_page_preview=True)
+    if res and "打卡" in (msg.text or ""):
+        user_name = res[0]['value']
+        await msg.reply(f"✅ 认证用户【{user_name}】打卡成功！")
 
-# --- FastAPI 路由 ---
+# --- 4. Web 管理后台逻辑 ---
+
+# 动态路由：根据 tab 参数加载对应的 HTML
 @app.get("/manage", response_class=HTMLResponse)
-async def admin_page(request: Request, sid: str, gid: str, tab: str = "query"):
-    if sid not in auth_sessions: return "验证过期"
-    with get_db() as conn:
-        group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
-        if not group:
-            conn.execute("INSERT INTO groups (group_id) VALUES (?)", (gid,))
-            conn.commit()
-            group = conn.execute("SELECT * FROM groups WHERE group_id=?", (gid,)).fetchone()
-        timers = conn.execute("SELECT * FROM timers WHERE group_id=?", (gid,)).fetchall()
-        users = conn.execute("SELECT * FROM verified_users WHERE group_id=?", (gid,)).fetchall()
-    return templates.TemplateResponse(f"{tab}.html", {"request": request, "sid": sid, "gid": gid, "group": group, "timers": timers, "users": users, "tab": tab})
+async def page_manage(request: Request, gid: str, tab: str = "users"):
+    # 1. 从数据库取出该群组的所有配置，转成字典供前端使用
+    rows = db_query("SELECT key, value FROM settings WHERE gid=?", (gid,))
+    conf = {row['key']: row['value'] for row in rows if row['value']} # 过滤掉空值
+    
+    # 2. 返回对应的 HTML 页面 (比如 tab=users 就返回 users.html)
+    return templates.TemplateResponse(f"{tab}.html", {
+        "request": request, 
+        "gid": gid, 
+        "tab": tab, 
+        "conf": conf
+    })
 
-# 全功能 API：保存配置
-@app.post("/api/save")
-async def api_save(sid:str=Form(...), gid:str=Form(...), list_t:str=Form(...), check_t:str=Form(...), fields:str=Form(...), emoji:str=Form(...)):
-    with get_db() as conn:
-        conn.execute("UPDATE groups SET list_template=?, checkin_template=?, custom_fields=?, like_emoji=? WHERE group_id=?", (list_t, check_t, fields, emoji, gid))
-        conn.commit()
-    return JSONResponse({"status": "ok"})
+# 万能同步接口：网页点保存，直接调这个
+@app.post("/api/set")
+async def api_set(gid: str = Form(...), key: str = Form(...), value: str = Form(None)):
+    if not value or value.strip() == "":
+        db_exec("DELETE FROM settings WHERE gid=? AND key=?", (gid, key))
+    else:
+        db_exec("INSERT OR REPLACE INTO settings VALUES (?, ?, ?)", (gid, key, value))
+    return {"status": "ok"}
 
-# 全功能 API：用户管理 (支持修改/删除)
-@app.post("/api/user")
-async def api_user(sid:str=Form(...), gid:str=Form(...), user_id:str=Form(...), name:str=Form(...), data:str=Form(...), action:str=Form(...)):
-    with get_db() as conn:
-        if action == "del": conn.execute("DELETE FROM verified_users WHERE user_id=? AND group_id=?", (user_id, gid))
-        else: conn.execute("INSERT OR REPLACE INTO verified_users VALUES (?,?,?,?)", (user_id, gid, name, data))
-        conn.commit()
-    return JSONResponse({"status": "ok"})
-
+# --- 5. 生命周期管理 ---
 @app.on_event("startup")
 async def startup():
     init_db()
