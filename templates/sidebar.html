@@ -1,31 +1,8 @@
-<div class="d-flex flex-column p-3 bg-white shadow-sm" style="border-radius: 15px; min-height: 80vh;">
-    <div class="mb-4">
-        <a href="/manage?sid={{ sid }}" class="btn btn-light w-100 text-primary fw-bold">
-            <i class="bi bi-grid-fill me-2"></i> 返回群组列表
-        </a>
-    </div>
-    
-    <ul class="nav nav-pills flex-column mb-auto">
-        <li class="nav-item">
-            <a href="/settings?sid={{ sid }}&gid={{ gid }}" class="nav-link {% if 'settings' in request.url.path %}active{% endif %}">
-                <i class="bi bi-gear-wide-connected me-2"></i> 机器人设置
-            </a>
-        </li>
-        <li class="nav-item">
-            <a href="/tasks?sid={{ sid }}&gid={{ gid }}" class="nav-link {% if 'tasks' in request.url.path %}active{% endif %}">
-                <i class="bi bi-calendar2-week me-2"></i> 定时发送
-            </a>
-        </li>
-        <li class="nav-item">
-            <a href="#" class="nav-link text-muted">
-                <i class="bi bi-person-check me-2"></i> 验证用户管理
-            </a>
-        </li>
-    </ul>
-    
-    <hr>
-    <div class="px-2 small text-muted">
-        当前群 ID:<br>
-        <code class="text-break">{{ gid }}</code>
+<div class="card p-3 mb-4">
+    <a href="/manage?sid={{ sid }}" class="btn btn-light w-100 mb-3 fw-bold">返回列表</a>
+    <div class="nav flex-column nav-pills">
+        <a href="/settings?sid={{ sid }}&gid={{ gid }}" class="nav-link active mb-2">基础设置</a>
+        <a href="/tasks?sid={{ sid }}&gid={{ gid }}" class="nav-link mb-2">定时发送</a>
+        <a href="/users?sid={{ sid }}&gid={{ gid }}" class="nav-link">用户认证</a>
     </div>
 </div>
