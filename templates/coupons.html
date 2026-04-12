@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}优惠券审核 — CheBot{% endblock %}
+{% block page_title %}🎫 优惠券管理{% endblock %}
+{% block content %}
+
+<!-- Filter tabs -->
+<div class="flex gap-2 mb-5">
+  <a href="?status=pending" class="px-4 py-2 rounded-lg text-sm {% if request.query_params.get('status','pending')=='pending' %}bg-indigo-600 text-white{% else %}bg-white dark:bg-gray-800 hover:bg-gray-50{% endif %}">
+    待审核
+  </a>
+  <a href="?status=approved" class="px-4 py-2 rounded-lg text-sm {% if request.query_params.get('status')=='approved' %}bg-green-600 text-white{% else %}bg-white dark:bg-gray-800 hover:bg-gray-50{% endif %}">
+    已发布
+  </a>
+  <a href="?status=rejected" class="px-4 py-2 rounded-lg text-sm {% if request.query_params.get('status')=='rejected' %}bg-red-600 text-white{% else %}bg-white dark:bg-gray-800 hover:bg-gray-50{% endif %}">
+    已拒绝
+  </a>
+</div>
+
+<div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 dark:bg-gray-700">
+        <tr>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">ID</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">发布者</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">标题</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">折扣</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">内容预览</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">有效期至</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">状态</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">提交时间</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">操作</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y dark:divide-gray-700">
+        {% for c in coupons %}
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+          <td class="px-4 py-3 font-mono text-gray-400 text-xs">#{{ c.id }}</td>
+          <td class="px-4 py-3 font-medium">{{ c.user_name or '—' }}</td>
+          <td class="px-4 py-3 font-medium">{{ c.title }}</td>
+          <td class="px-4 py-3 text-green-600 font-semibold">{{ c.discount or '—' }}</td>
+          <td class="px-4 py-3 max-w-xs truncate text-gray-500">{{ c.description or '—' }}</td>
+          <td class="px-4 py-3 text-xs text-gray-400">{{ c.valid_until.strftime('%Y-%m-%d') if c.valid_until else '—' }}</td>
+          <td class="px-4 py-3">
+            {% if c.status == 'pending' %}
+              <span class="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-700">待审</span>
+            {% elif c.status == 'approved' %}
+              <span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">已发布</span>
+            {% else %}
+              <span class="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">已拒绝</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-xs text-gray-400">{{ c.created_at.strftime('%m-%d %H:%M') if c.created_at else '—' }}</td>
+          <td class="px-4 py-3">
+            {% if c.status == 'pending' %}
+            <div class="flex gap-2">
+              <button onclick="approveCoupon({{ c.id }})"
+                class="text-xs bg-green-100 text-green-700 hover:bg-green-200 px-2 py-1 rounded">✓ 发布</button>
+              <button onclick="rejectCoupon({{ c.id }})"
+                class="text-xs bg-red-100 text-red-700 hover:bg-red-200 px-2 py-1 rounded">✗ 拒绝</button>
+            </div>
+            {% else %}
+            <span class="text-gray-400 text-xs">已处理</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">暂无优惠券记录</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  async function approveCoupon(id) {
+    await fetch(`/api/coupons/${id}/approve`, { method: 'POST' });
+    location.reload();
+  }
+  async function rejectCoupon(id) {
+    await fetch(`/api/coupons/${id}/reject`, { method: 'POST' });
+    location.reload();
+  }
+</script>
+{% endblock %}

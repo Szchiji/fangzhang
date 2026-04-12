@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}风控中心 — CheBot{% endblock %}
+{% block page_title %}🛡️ 风控中心{% endblock %}
+{% block content %}
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+  <!-- Blacklist -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+    <div class="px-5 py-4 border-b dark:border-gray-700 flex items-center justify-between">
+      <h3 class="font-semibold">🚫 黑名单用户</h3>
+      <span class="text-sm text-gray-400">{{ blacklisted|length }} 人</span>
+    </div>
+    <div class="divide-y dark:divide-gray-700 max-h-64 overflow-y-auto">
+      {% for u in blacklisted %}
+      <div class="flex items-center justify-between px-5 py-3 text-sm">
+        <div>
+          <span class="font-medium">{{ u.full_name or '—' }}</span>
+          <span class="text-gray-400 ml-2 font-mono text-xs">{{ u.uid }}</span>
+          {% if u.username %}<span class="text-indigo-400 ml-1">@{{ u.username }}</span>{% endif %}
+        </div>
+        <button onclick="riskAction('whitelist', {{ u.uid }}, null)"
+          class="text-xs text-green-600 hover:underline">解除</button>
+      </div>
+      {% else %}
+      <p class="px-5 py-4 text-sm text-gray-400">黑名单为空</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Watchlist -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+    <div class="px-5 py-4 border-b dark:border-gray-700 flex items-center justify-between">
+      <h3 class="font-semibold">👁️ 监控名单</h3>
+      <span class="text-sm text-gray-400">{{ watchlist|length }} 人</span>
+    </div>
+    <div class="divide-y dark:divide-gray-700 max-h-64 overflow-y-auto">
+      {% for u in watchlist %}
+      <div class="flex items-center justify-between px-5 py-3 text-sm">
+        <div>
+          <span class="font-medium">{{ u.full_name or '—' }}</span>
+          <span class="text-gray-400 ml-2 font-mono text-xs">{{ u.uid }}</span>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="riskAction('blacklist', {{ u.uid }}, null)"
+            class="text-xs text-red-500 hover:underline">拉黑</button>
+          <button onclick="riskAction('whitelist', {{ u.uid }}, null)"
+            class="text-xs text-green-600 hover:underline">解除</button>
+        </div>
+      </div>
+      {% else %}
+      <p class="px-5 py-4 text-sm text-gray-400">监控名单为空</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Manual action -->
+<div class="bg-white dark:bg-gray-800 rounded-xl shadow p-5 mb-6">
+  <h3 class="font-semibold mb-4">⚡ 快速操作</h3>
+  <div class="flex flex-wrap gap-3">
+    <input id="action-uid" type="number" placeholder="Telegram UID"
+      class="rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm w-40" />
+    <input id="action-cert-id" type="number" placeholder="认证用户ID（可选）"
+      class="rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm w-44" />
+    <input id="action-reason" placeholder="原因（可选）"
+      class="rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm w-48" />
+    <select id="action-type"
+      class="rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm">
+      <option value="blacklist">🚫 加入黑名单</option>
+      <option value="whitelist">✅ 加入白名单</option>
+      <option value="watchlist">👁️ 加入监控</option>
+      <option value="freeze">🔒 冻结认证</option>
+      <option value="unfreeze">🔓 解冻认证</option>
+    </select>
+    <button onclick="submitRiskAction()"
+      class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700">执行操作</button>
+  </div>
+</div>
+
+<!-- Risk logs -->
+<div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+  <div class="px-5 py-4 border-b dark:border-gray-700">
+    <h3 class="font-semibold">📋 风控操作日志</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 dark:bg-gray-700">
+        <tr>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">ID</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">UID</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">认证ID</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">操作</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">原因</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">时间</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y dark:divide-gray-700">
+        {% for log in logs %}
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+          <td class="px-4 py-3 font-mono text-gray-400 text-xs">#{{ log.id }}</td>
+          <td class="px-4 py-3 font-mono text-xs">{{ log.uid or '—' }}</td>
+          <td class="px-4 py-3 font-mono text-xs">{{ log.certified_user_id or '—' }}</td>
+          <td class="px-4 py-3">
+            <span class="px-2 py-0.5 rounded-full text-xs
+              {% if 'blacklist' in log.action %}bg-red-100 text-red-700
+              {% elif 'whitelist' in log.action %}bg-green-100 text-green-700
+              {% elif 'frozen' in log.action or 'freeze' in log.action %}bg-blue-100 text-blue-700
+              {% else %}bg-gray-100 text-gray-700{% endif %}">
+              {{ log.action }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-gray-500 text-xs">{{ log.reason or '—' }}</td>
+          <td class="px-4 py-3 text-xs text-gray-400">{{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">暂无风控日志</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  async function riskAction(action, uid, certId, reason) {
+    const body = { action, uid, cert_id: certId, reason: reason || '' };
+    await fetch('/api/risk/action', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    location.reload();
+  }
+
+  async function submitRiskAction() {
+    const uid = parseInt(document.getElementById('action-uid').value) || null;
+    const certId = parseInt(document.getElementById('action-cert-id').value) || null;
+    const action = document.getElementById('action-type').value;
+    const reason = document.getElementById('action-reason').value;
+
+    if (!uid && !certId) { alert('请输入 UID 或认证用户ID'); return; }
+    await riskAction(action, uid, certId, reason);
+  }
+</script>
+{% endblock %}
