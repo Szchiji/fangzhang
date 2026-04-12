@@ -1,6 +1,0 @@
-fastapi
-uvicorn
-aiogram
-apscheduler
-jinja2
-python-multipart
