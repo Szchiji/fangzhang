@@ -239,20 +239,24 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
         c = db_query_one("SELECT * FROM coupons WHERE id = %s", (cid,))
         if not c:
             raise HTTPException(404)
-        db_exec("UPDATE coupons SET status='approved', published_at=NOW() WHERE id=%s", (cid,))
-        if CHANNEL_ID:
-            text = (
-                f"🎫 <b>优惠券</b>\n\n"
-                f"📌 {c['title']}\n"
-                f"📝 {c['description']}\n"
-                f"💰 折扣: {c['discount']}\n"
-                f"📅 有效期至: {c['valid_until']}"
-            )
-            try:
-                await bot.send_message(CHANNEL_ID, text)
-            except Exception:
-                pass
-        return {"status": "ok"}
+        if not CHANNEL_ID:
+            # Approve without publishing — no channel configured
+            db_exec("UPDATE coupons SET status='approved' WHERE id=%s", (cid,))
+            return {"status": "ok", "published": False, "note": "PUBLISH_CHANNEL_ID not set"}
+        text = (
+            f"🎫 <b>优惠券</b>\n\n"
+            f"📌 {c['title']}\n"
+            f"📝 {c['description']}\n"
+            f"💰 折扣: {c['discount']}\n"
+            f"📅 有效期至: {c['valid_until']}"
+        )
+        try:
+            await bot.send_message(CHANNEL_ID, text)
+            db_exec("UPDATE coupons SET status='published', published_at=NOW() WHERE id=%s", (cid,))
+        except Exception as exc:
+            db_exec("UPDATE coupons SET status='approved' WHERE id=%s", (cid,))
+            return {"status": "ok", "published": False, "note": str(exc)}
+        return {"status": "ok", "published": True}
 
     @app.post("/api/coupons/{cid}/reject")
     async def api_reject_coupon(cid: int):
