@@ -162,8 +162,7 @@ async def on_rating_comment(msg: types.Message, state: FSMContext):
         _update_trust_score(cert_id)
 
     # Award points
-    from db import db_query_one as dq
-    user = dq("SELECT points FROM users WHERE uid = %s", (msg.from_user.id,))
+    user = db_query_one("SELECT points FROM users WHERE uid = %s", (msg.from_user.id,))
     if user:
         new_bal = (user["points"] or 0) + 20
         db_exec("UPDATE users SET points = %s WHERE uid = %s", (new_bal, msg.from_user.id))

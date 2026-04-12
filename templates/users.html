@@ -39,7 +39,7 @@
       </thead>
       <tbody class="divide-y dark:divide-gray-700">
         {% for u in users %}
-        {% set is_expired = u.valid_until and u.valid_until.strftime('%Y-%m-%d') < now_str %}
+        {% set is_expired = u.valid_until and u.valid_until < today %}
         <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 {% if is_expired %}bg-red-50 dark:bg-red-900/10{% endif %}">
           <td class="px-4 py-3 font-mono text-gray-400 text-xs">#{{ u.id }}</td>
           <td class="px-4 py-3 font-medium">{{ u.display_name }}</td>

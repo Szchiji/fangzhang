@@ -27,25 +27,33 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
 
     @app.get("/users", response_class=HTMLResponse)
     async def page_users(request: Request, status: str = "", region: str = "", level: str = ""):
-        filters = ["1=1"]
-        params = []
+        from datetime import date as _date
+        conditions = []
+        params: list = []
         if status:
-            filters.append("status = %s")
+            conditions.append("status = %s")
             params.append(status)
         if region:
-            filters.append("(region ILIKE %s OR city ILIKE %s)")
+            conditions.append("(region ILIKE %s OR city ILIKE %s)")
             params.extend([f"%{region}%", f"%{region}%"])
-        if level:
-            filters.append("level = %s")
+        if level and level.isdigit():
+            conditions.append("level = %s")
             params.append(int(level))
-        where = " AND ".join(filters)
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
         users = db_query(
-            f"SELECT * FROM certified_users WHERE {where} ORDER BY created_at DESC",
+            f"SELECT * FROM certified_users {where} ORDER BY created_at DESC",
             params,
         )
         return templates.TemplateResponse(
             "users.html",
-            {"request": request, "users": users, "filter_status": status, "filter_region": region, "filter_level": level},
+            {
+                "request": request,
+                "users": users,
+                "today": _date.today(),
+                "filter_status": status,
+                "filter_region": region,
+                "filter_level": level,
+            },
         )
 
     @app.get("/user/new", response_class=HTMLResponse)
@@ -134,15 +142,16 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
     # ── Certified Users API ────────────────────────────────────────────────────
     @app.get("/api/users")
     async def api_users(status: str = "", region: str = ""):
-        filters = ["1=1"]
+        conditions = []
         params: list = []
         if status:
-            filters.append("status = %s")
+            conditions.append("status = %s")
             params.append(status)
         if region:
-            filters.append("(region ILIKE %s OR city ILIKE %s)")
+            conditions.append("(region ILIKE %s OR city ILIKE %s)")
             params.extend([f"%{region}%", f"%{region}%"])
-        rows = db_query(f"SELECT * FROM certified_users WHERE {' AND '.join(filters)} ORDER BY id DESC", params)
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        rows = db_query(f"SELECT * FROM certified_users {where} ORDER BY id DESC", params)
         return JSONResponse([dict(r) for r in rows])
 
     @app.post("/api/users")

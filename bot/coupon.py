@@ -4,6 +4,7 @@ from aiogram import Router, types, Bot
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from dateutil.parser import parse as parse_date
 from db import db_exec, db_query_one
 
 router = Router()
@@ -33,9 +34,10 @@ async def cmd_coupon(msg: types.Message, state: FSMContext):
         return
 
     # Check cooldown
+    cooldown_cutoff = date.today() - timedelta(days=COUPON_COOLDOWN_DAYS)
     recent = db_query_one(
-        "SELECT created_at FROM coupons WHERE certified_user_id = %s AND created_at > NOW() - INTERVAL '%s days'",
-        (cert["id"], COUPON_COOLDOWN_DAYS),
+        "SELECT created_at FROM coupons WHERE certified_user_id = %s AND created_at::date > %s",
+        (cert["id"], cooldown_cutoff),
     )
     if recent:
         next_date = (recent["created_at"].date() + timedelta(days=COUPON_COOLDOWN_DAYS))
@@ -84,7 +86,6 @@ async def on_coupon_valid_until(msg: types.Message, state: FSMContext, bot: Bot)
         valid_until = date.today() + timedelta(days=30)
     else:
         try:
-            from dateutil.parser import parse as parse_date
             valid_until = parse_date(text).date()
         except Exception:
             await msg.answer("❌ 日期格式错误，请使用 YYYY-MM-DD 格式")
