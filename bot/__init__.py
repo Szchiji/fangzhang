@@ -9,10 +9,11 @@ from .rating import router as rating_router
 from .coupon import router as coupon_router
 from .tasks import router as tasks_router
 from .admin import router as admin_router
+from .myprofile import router as myprofile_router
 
 
 def register_all(dp: Dispatcher):
     for r in [start_router, group_router, sub_router, cert_router,
               checkin_router, nearby_router, rating_router, coupon_router,
-              tasks_router, admin_router]:
+              tasks_router, admin_router, myprofile_router]:
         dp.include_router(r)

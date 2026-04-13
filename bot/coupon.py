@@ -44,7 +44,26 @@ async def cmd_coupon(msg: types.Message, state: FSMContext):
         (uid,),
     )
     if not cert:
-        await msg.answer("❌ 只有认证用户才能发布优惠券\n请联系管理员申请认证")
+        # Check if user was certified but expired
+        expired = db_query_one(
+            "SELECT display_name, valid_until FROM certified_users WHERE uid = %s ORDER BY id DESC LIMIT 1",
+            (uid,),
+        )
+        if expired:
+            await msg.answer(
+                "⛔ <b>无法发布优惠券 — 认证已过期</b>\n\n"
+                f"您的认证（{expired['display_name']}）已于 {expired['valid_until']} 到期。\n\n"
+                "请联系管理员续期认证后，即可恢复发布优惠券的权限。"
+            )
+        else:
+            await msg.answer(
+                "❌ <b>无法发布优惠券 — 未认证</b>\n\n"
+                "只有认证用户才能发布优惠券到推广频道。\n\n"
+                "如需申请认证，请联系管理员。认证后即可享受：\n"
+                "• 🎫 发布优惠券\n"
+                "• 📢 认证名片展示\n"
+                "• ⭐ 用户评价与信任分"
+            )
         return
 
     # Check cooldown
@@ -55,8 +74,13 @@ async def cmd_coupon(msg: types.Message, state: FSMContext):
     )
     if recent:
         next_date = (recent["created_at"].date() + timedelta(days=COUPON_COOLDOWN_DAYS))
+        days_left = (next_date - date.today()).days
         await msg.answer(
-            f"⏳ 发布冷却中\n您可以在 <b>{next_date}</b> 后再次发布优惠券"
+            f"⏳ <b>发布冷却中</b>\n\n"
+            f"上次发布：{recent['created_at'].strftime('%Y-%m-%d')}\n"
+            f"下次可发布：<b>{next_date}</b>（还需等待 {days_left} 天）\n\n"
+            f"每位认证用户每 {COUPON_COOLDOWN_DAYS} 天可发布一次优惠券，"
+            "以保证频道内容质量。"
         )
         return
 
