@@ -10,7 +10,21 @@ from db import db_exec, db_query_one
 router = Router()
 
 COUPON_COOLDOWN_DAYS = 7
-CHANNEL_ID = os.getenv("PUBLISH_CHANNEL_ID", "")
+DEFAULT_CHANNEL_ID = os.getenv("PUBLISH_CHANNEL_ID", "")
+
+
+def _get_global_setting(key: str, default: str = "") -> str:
+    row = db_query_one("SELECT value FROM settings WHERE gid='global' AND key=%s", (key,))
+    return row["value"] if row and row.get("value") else default
+
+
+class _SafeFormatDict(dict):
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+def _render_push_template(template: str, context: dict) -> str:
+    return template.replace("\\n", "\n").format_map(_SafeFormatDict(context))
 
 
 class CouponStates(StatesGroup):
@@ -109,7 +123,8 @@ async def on_coupon_valid_until(msg: types.Message, state: FSMContext, bot: Bot)
         (cert_id, msg.from_user.id, data["title"], data["description"], data["discount"], valid_until, status),
     )
 
-    if status == "approved" and CHANNEL_ID:
+    channel_id = _get_global_setting("publish_channel_id", DEFAULT_CHANNEL_ID)
+    if status == "approved" and channel_id:
         await _publish_coupon_to_channel(bot, cert_id, data, valid_until, msg.from_user.id)
         await msg.answer("✅ 优惠券已发布到频道！")
     else:
@@ -123,24 +138,31 @@ async def on_coupon_valid_until(msg: types.Message, state: FSMContext, bot: Bot)
 
 
 async def _publish_coupon_to_channel(bot: Bot, cert_id: int, data: dict, valid_until, uid: int):
-    if not CHANNEL_ID:
+    channel_id = _get_global_setting("publish_channel_id", DEFAULT_CHANNEL_ID)
+    if not channel_id:
         return
     cu = db_query_one("SELECT display_name FROM certified_users WHERE id = %s", (cert_id,))
     name = cu["display_name"] if cu else "认证用户"
-    text = (
-        f"🎫 <b>优惠券</b>\n\n"
-        f"👤 发布者: {name}\n"
-        f"📌 {data['title']}\n"
-        f"📝 {data['description']}\n"
-        f"💰 折扣: {data['discount']}\n"
-        f"📅 有效期至: {valid_until}\n\n"
-        f"详情: /user_{cert_id}"
+    coupon_template = _get_global_setting(
+        "coupon_push_template",
+        "🎫 <b>优惠券</b>\n\n👤 发布者: {display_name}\n📌 {title}\n📝 {description}\n💰 折扣: {discount}\n📅 有效期至: {valid_until}\n\n详情: /user_{certified_user_id}",
+    )
+    text = _render_push_template(
+        coupon_template,
+        {
+            "display_name": name,
+            "title": data.get("title", ""),
+            "description": data.get("description", ""),
+            "discount": data.get("discount", ""),
+            "valid_until": valid_until,
+            "certified_user_id": cert_id,
+        },
     )
     try:
-        sent = await bot.send_message(CHANNEL_ID, text)
+        sent = await bot.send_message(channel_id, text)
         db_exec(
             "UPDATE coupons SET published_at = NOW(), channel_id = %s, message_id = %s WHERE certified_user_id = %s AND uid = %s ORDER BY id DESC LIMIT 1",
-            (CHANNEL_ID, sent.message_id, cert_id, uid),
+            (channel_id, sent.message_id, cert_id, uid),
         )
     except Exception as e:
         import logging

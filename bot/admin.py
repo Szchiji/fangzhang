@@ -8,7 +8,7 @@ from db import db_exec, db_query, db_query_one
 
 router = Router()
 
-CHANNEL_ID = os.getenv("PUBLISH_CHANNEL_ID", "")
+DEFAULT_CHANNEL_ID = os.getenv("PUBLISH_CHANNEL_ID", "")
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
 
 
@@ -20,6 +20,20 @@ async def _is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
         return member.status in ("creator", "administrator")
     except Exception:
         return False
+
+
+def _get_global_setting(key: str, default: str = "") -> str:
+    row = db_query_one("SELECT value FROM settings WHERE gid='global' AND key=%s", (key,))
+    return row["value"] if row and row.get("value") else default
+
+
+class _SafeFormatDict(dict):
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+def _render_push_template(template: str, context: dict) -> str:
+    return template.replace("\\n", "\n").format_map(_SafeFormatDict(context))
 
 
 class AddUserStates(StatesGroup):
@@ -346,27 +360,39 @@ async def cmd_push(msg: types.Message, bot: Bot):
         await msg.reply("❌ 用户不存在或已非活跃状态")
         return
 
-    if not CHANNEL_ID:
-        await msg.reply("❌ 未配置发布频道（PUBLISH_CHANNEL_ID）")
+    channel_id = _get_global_setting("publish_channel_id", DEFAULT_CHANNEL_ID)
+    if not channel_id:
+        await msg.reply("❌ 未配置发布频道（请在后台全局配置 publish_channel_id）")
         return
 
+    profile_template = _get_global_setting(
+        "profile_push_template",
+        "✅ <b>{display_name}</b> {level_stars}\n{region_line}\n信任分: <b>{trust_score}</b>\n{bio}\n{tags}\n\n详情: /user_{certified_user_id}",
+    )
     level_stars = "🔸" * int(u.get("level", 1))
-    region = f"📍 {u['city'] or u['region']}" if (u.get("city") or u.get("region")) else ""
+    region_line = f"📍 {u['city'] or u['region']}" if (u.get("city") or u.get("region")) else ""
     tags = " ".join(f"#{t}" for t in (u.get("tags") or []))
-    text = (
-        f"✅ <b>{u['display_name']}</b> {level_stars}\n"
-        f"{region}\n"
-        f"信任分: <b>{u.get('trust_score', 0):.1f}</b>\n"
-        f"{u.get('bio', '')}\n"
-        f"{tags}\n\n"
-        f"详情: /user_{cert_id}"
+    text = _render_push_template(
+        profile_template,
+        {
+            "display_name": u.get("display_name", ""),
+            "level_stars": level_stars,
+            "region_line": region_line,
+            "trust_score": float(u.get("trust_score", 0)),
+            "bio": u.get("bio", ""),
+            "tags": tags,
+            "certified_user_id": cert_id,
+            "region": u.get("region", ""),
+            "city": u.get("city", ""),
+            "contact": u.get("contact", ""),
+        },
     )
 
     try:
-        sent = await bot.send_message(CHANNEL_ID, text)
+        sent = await bot.send_message(channel_id, text)
         db_exec(
             "INSERT INTO channel_pushes (certified_user_id, channel_id, message_id) VALUES (%s, %s, %s)",
-            (cert_id, CHANNEL_ID, sent.message_id),
+            (cert_id, channel_id, sent.message_id),
         )
         await msg.reply(f"✅ 已将 <b>{u['display_name']}</b> 推送到频道")
     except Exception as e:
