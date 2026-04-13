@@ -46,31 +46,48 @@ async def cmd_subscribe(msg: types.Message, bot: Bot):
     uid = msg.from_user.id
 
     if gid == "private":
-        await msg.answer("ℹ️ 订阅验证仅在群组中有效")
+        await msg.answer(
+            "ℹ️ <b>订阅验证说明</b>\n\n"
+            "订阅验证仅在群组中有效。\n"
+            "请在已配置订阅规则的群组中使用 /subscribe 检查您的订阅状态。"
+        )
         return
 
     unsubscribed = await check_subscriptions(bot, uid, gid)
     if not unsubscribed:
-        await msg.reply("✅ 您已订阅所有必需频道，可使用全部功能！")
+        await msg.reply(
+            "✅ <b>订阅验证通过</b>\n\n"
+            "您已订阅所有必需频道，可以使用本群的全部功能。"
+        )
         return
 
+    names = "、".join(ch.get("channel_name") or ch["channel_id"] for ch in unsubscribed)
     await msg.reply(
-        f"📋 使用本群功能需先订阅以下 {len(unsubscribed)} 个频道：",
+        f"🔒 <b>需要完成订阅才能使用功能</b>\n\n"
+        f"还需订阅以下 {len(unsubscribed)} 个频道：<b>{names}</b>\n\n"
+        "请点击下方按钮加入频道后，点击「已订阅」重新验证。",
         reply_markup=build_subscription_keyboard(unsubscribed),
     )
 
 
 @router.callback_query(lambda c: c.data == "sub:recheck")
 async def on_recheck(callback: types.CallbackQuery, bot: Bot):
-    await callback.answer("正在验证...")
+    await callback.answer("正在验证订阅状态...")
     gid = str(callback.message.chat.id)
     uid = callback.from_user.id
 
     unsubscribed = await check_subscriptions(bot, uid, gid)
     if not unsubscribed:
-        await callback.message.edit_text("✅ 验证通过！您已订阅所有必需频道，可使用全部功能。")
+        await callback.message.edit_text(
+            "✅ <b>验证通过！</b>\n\n"
+            "您已订阅所有必需频道，现在可以使用本群的全部功能。"
+        )
     else:
+        names = "、".join(ch.get("channel_name") or ch["channel_id"] for ch in unsubscribed)
         await callback.message.edit_reply_markup(
             reply_markup=build_subscription_keyboard(unsubscribed)
         )
-        await callback.answer(f"还有 {len(unsubscribed)} 个频道未订阅", show_alert=True)
+        await callback.answer(
+            f"仍有 {len(unsubscribed)} 个频道未订阅：{names}",
+            show_alert=True,
+        )

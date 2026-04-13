@@ -317,27 +317,55 @@ async def cmd_watch(msg: types.Message, bot: Bot):
 @router.message(Command("dashboard"))
 async def cmd_dashboard(msg: types.Message, bot: Bot):
     if not await _is_admin(bot, msg.chat.id, msg.from_user.id):
-        await msg.reply("❌ 仅管理员可用")
+        await msg.reply("❌ 此命令仅限管理员使用")
         return
 
     total_users = db_query_one("SELECT COUNT(*) as cnt FROM certified_users")
     active = db_query_one("SELECT COUNT(*) as cnt FROM certified_users WHERE status='active' AND (valid_until IS NULL OR valid_until > NOW())")
     expired = db_query_one("SELECT COUNT(*) as cnt FROM certified_users WHERE valid_until < NOW()")
+    expiring_soon = db_query_one(
+        """
+        SELECT COUNT(*) as cnt FROM certified_users
+        WHERE status='active' AND valid_until IS NOT NULL
+          AND valid_until < NOW() + INTERVAL '7 days' AND valid_until > NOW()
+        """
+    )
     checkins_today = db_query_one("SELECT COUNT(*) as cnt FROM checkins WHERE checkin_date = CURRENT_DATE")
     pending_ratings = db_query_one("SELECT COUNT(*) as cnt FROM ratings WHERE status='pending'")
     pending_coupons = db_query_one("SELECT COUNT(*) as cnt FROM coupons WHERE status='pending'")
     new_users_today = db_query_one("SELECT COUNT(*) as cnt FROM users WHERE created_at::date = CURRENT_DATE")
+    violations_today = db_query_one("SELECT COUNT(*) as cnt FROM violations WHERE created_at::date = CURRENT_DATE")
+
+    ex = expiring_soon["cnt"] if expiring_soon else 0
+    pr = pending_ratings["cnt"] if pending_ratings else 0
+    pc = pending_coupons["cnt"] if pending_coupons else 0
+    vt = violations_today["cnt"] if violations_today else 0
+
+    alert_lines = []
+    if ex > 0:
+        alert_lines.append(f"⏰ {ex} 位用户认证即将到期（7天内）")
+    if pr > 0:
+        alert_lines.append(f"⭐ {pr} 条评价待审核")
+    if pc > 0:
+        alert_lines.append(f"🎫 {pc} 张优惠券待审核")
+    if vt > 0:
+        alert_lines.append(f"⚠️ 今日 {vt} 条违规记录")
+    alert_block = "\n".join(f"  • {a}" for a in alert_lines) if alert_lines else "  ✅ 无待处理事项"
+
+    base_url = _get_base_url()
 
     await msg.answer(
-        "<b>📊 今日数据概览</b>\n\n"
-        f"👥 认证用户总数: <b>{total_users['cnt']}</b>\n"
-        f"✅ 活跃用户: <b>{active['cnt']}</b>\n"
-        f"⏰ 已过期: <b>{expired['cnt']}</b>\n"
-        f"📅 今日签到: <b>{checkins_today['cnt']}</b>\n"
-        f"🆕 今日新增: <b>{new_users_today['cnt']}</b>\n"
-        f"⭐ 待审评价: <b>{pending_ratings['cnt']}</b>\n"
-        f"🎫 待审优惠券: <b>{pending_coupons['cnt']}</b>\n\n"
-        f"🖥️ <a href='{_get_base_url()}/dashboard'>打开完整管理后台</a>"
+        "<b>📊 管理员数据看板</b>\n\n"
+        "<b>👥 认证用户</b>\n"
+        f"  总计：<b>{total_users['cnt']}</b>  活跃：<b>{active['cnt']}</b>  "
+        f"已过期：<b>{expired['cnt']}</b>\n\n"
+        "<b>📅 今日动态</b>\n"
+        f"  新增用户：<b>{new_users_today['cnt']}</b>  签到：<b>{checkins_today['cnt']}</b>\n\n"
+        "<b>🔔 需要处理</b>\n"
+        f"{alert_block}\n\n"
+        f"🖥️ <a href='{base_url}/dashboard'>打开完整管理后台</a>\n"
+        f"👥 <a href='{base_url}/users'>用户管理</a>  "
+        f"⚙️ <a href='{base_url}/settings'>全局配置</a>"
     )
 
 
