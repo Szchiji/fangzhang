@@ -21,8 +21,9 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
             "SELECT id, display_name, status, trust_score, created_at FROM certified_users ORDER BY created_at DESC LIMIT 10"
         )
         return templates.TemplateResponse(
+            request,
             "dashboard.html",
-            {"request": request, "stats": stats, "recent_users": recent_users},
+            {"stats": stats, "recent_users": recent_users},
         )
 
     @app.get("/users", response_class=HTMLResponse)
@@ -45,9 +46,9 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
             params,
         )
         return templates.TemplateResponse(
+            request,
             "users.html",
             {
-                "request": request,
                 "users": users,
                 "today": _date.today(),
                 "filter_status": status,
@@ -58,14 +59,14 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
 
     @app.get("/user/new", response_class=HTMLResponse)
     async def page_user_new(request: Request):
-        return templates.TemplateResponse("user_form.html", {"request": request, "user": None})
+        return templates.TemplateResponse(request, "user_form.html", {"user": None})
 
     @app.get("/user/{cert_id}/edit", response_class=HTMLResponse)
     async def page_user_edit(request: Request, cert_id: int):
         u = db_query_one("SELECT * FROM certified_users WHERE id = %s", (cert_id,))
         if not u:
             raise HTTPException(404, "User not found")
-        return templates.TemplateResponse("user_form.html", {"request": request, "user": u})
+        return templates.TemplateResponse(request, "user_form.html", {"user": u})
 
     @app.get("/settings", response_class=HTMLResponse)
     async def page_settings(request: Request, gid: str = ""):
@@ -77,8 +78,9 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
             conf = {r["key"]: r["value"] for r in rows}
             sub_rules = db_query("SELECT * FROM subscription_rules WHERE gid=%s ORDER BY id", (gid,))
         return templates.TemplateResponse(
+            request,
             "settings.html",
-            {"request": request, "groups": groups, "gid": gid, "conf": conf, "sub_rules": sub_rules},
+            {"groups": groups, "gid": gid, "conf": conf, "sub_rules": sub_rules},
         )
 
     @app.get("/manage", response_class=HTMLResponse)
@@ -86,8 +88,9 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
         rows = db_query("SELECT key, value FROM settings WHERE gid=%s", (gid,)) if gid else []
         conf = {r["key"]: r["value"] for r in rows}
         return templates.TemplateResponse(
+            request,
             "settings.html",
-            {"request": request, "gid": gid, "tab": tab, "conf": conf, "groups": [], "sub_rules": []},
+            {"gid": gid, "tab": tab, "conf": conf, "groups": [], "sub_rules": []},
         )
 
     @app.get("/ratings", response_class=HTMLResponse)
@@ -102,7 +105,7 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
             LIMIT 100
             """
         )
-        return templates.TemplateResponse("ratings.html", {"request": request, "ratings": ratings})
+        return templates.TemplateResponse(request, "ratings.html", {"ratings": ratings})
 
     @app.get("/coupons", response_class=HTMLResponse)
     async def page_coupons(request: Request):
@@ -115,7 +118,7 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
             LIMIT 100
             """
         )
-        return templates.TemplateResponse("coupons.html", {"request": request, "coupons": coupons})
+        return templates.TemplateResponse(request, "coupons.html", {"coupons": coupons})
 
     @app.get("/risk", response_class=HTMLResponse)
     async def page_risk(request: Request):
@@ -123,8 +126,9 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
         blacklisted = db_query("SELECT * FROM users WHERE risk_status = 'blacklisted' ORDER BY uid")
         watchlist = db_query("SELECT * FROM users WHERE risk_status = 'watchlist' ORDER BY uid")
         return templates.TemplateResponse(
+            request,
             "risk.html",
-            {"request": request, "logs": logs, "blacklisted": blacklisted, "watchlist": watchlist},
+            {"logs": logs, "blacklisted": blacklisted, "watchlist": watchlist},
         )
 
     # ── Existing API route preserved ──────────────────────────────────────────
