@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}认证用户 — CheBot{% endblock %}
+{% block page_title %}👥 认证用户管理{% endblock %}
+{% block content %}
+
+<!-- Filters -->
+<form method="get" class="flex flex-wrap gap-3 mb-5">
+  <select name="status" class="rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm">
+    <option value="">所有状态</option>
+    <option value="active" {% if filter_status=='active' %}selected{% endif %}>活跃</option>
+    <option value="frozen" {% if filter_status=='frozen' %}selected{% endif %}>冻结</option>
+    <option value="blacklisted" {% if filter_status=='blacklisted' %}selected{% endif %}>黑名单</option>
+  </select>
+  <input name="region" placeholder="地区筛选" value="{{ filter_region }}"
+    class="rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm w-32" />
+  <input name="level" placeholder="等级" value="{{ filter_level }}" type="number" min="1" max="5"
+    class="rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm w-20" />
+  <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700">筛选</button>
+  <a href="/users" class="px-4 py-2 rounded-lg text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">重置</a>
+  <a href="/user/new" class="ml-auto bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700">+ 添加用户</a>
+</form>
+
+<!-- Table -->
+<div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 dark:bg-gray-700">
+        <tr>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">ID</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">名称</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">分类</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">地区</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">等级</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">信任分</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">状态</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">有效期至</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500">操作</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y dark:divide-gray-700">
+        {% for u in users %}
+        {% set is_expired = u.valid_until and u.valid_until < today %}
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 {% if is_expired %}bg-red-50 dark:bg-red-900/10{% endif %}">
+          <td class="px-4 py-3 font-mono text-gray-400 text-xs">#{{ u.id }}</td>
+          <td class="px-4 py-3 font-medium">{{ u.display_name }}</td>
+          <td class="px-4 py-3 text-gray-500">{{ u.category or '—' }}</td>
+          <td class="px-4 py-3 text-gray-500">{{ u.city or u.region or '—' }}</td>
+          <td class="px-4 py-3">{{ '🔸' * (u.level or 1) }}</td>
+          <td class="px-4 py-3 font-semibold text-indigo-600">{{ "%.1f"|format(u.trust_score or 0) }}</td>
+          <td class="px-4 py-3">
+            {% if u.status == 'active' and not is_expired %}
+              <span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">活跃</span>
+            {% elif is_expired %}
+              <span class="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">已过期</span>
+            {% elif u.status == 'frozen' %}
+              <span class="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">冻结</span>
+            {% elif u.status == 'blacklisted' %}
+              <span class="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">黑名单</span>
+            {% else %}
+              <span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">{{ u.status }}</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-xs {% if is_expired %}text-red-500{% else %}text-gray-400{% endif %}">
+            {{ u.valid_until.strftime('%Y-%m-%d') if u.valid_until else '永久' }}
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex gap-2">
+              <a href="/user/{{ u.id }}/edit" class="text-indigo-500 hover:underline text-xs">编辑</a>
+              <button onclick="deleteUser({{ u.id }}, '{{ u.display_name }}')"
+                class="text-red-500 hover:underline text-xs">删除</button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="px-4 py-8 text-center text-gray-400">暂无认证用户</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  const now_str = new Date().toISOString().split('T')[0];
+
+  async function deleteUser(id, name) {
+    if (!confirm(`确认删除「${name}」？此操作不可恢复！`)) return;
+    const r = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+    if ((await r.json()).status === 'ok') location.reload();
+  }
+</script>
+{% endblock %}

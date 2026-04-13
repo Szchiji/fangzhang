@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}群组设置 — CheBot{% endblock %}
+{% block page_title %}⚙️ 群组设置{% endblock %}
+{% block content %}
+
+<div class="flex gap-6">
+  <!-- Group list -->
+  <div class="w-56 shrink-0">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+      <div class="px-4 py-3 border-b dark:border-gray-700 font-semibold text-sm">群组列表</div>
+      {% for g in groups %}
+      <a href="/settings?gid={{ g.gid }}"
+        class="block px-4 py-2.5 text-sm border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50
+               {% if gid == g.gid %}bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600{% endif %}">
+        {{ g.gname or g.gid }}
+      </a>
+      {% else %}
+      <p class="px-4 py-3 text-xs text-gray-400">暂无群组</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Settings panel -->
+  <div class="flex-1">
+    {% if gid %}
+    <div class="space-y-6">
+
+      <!-- Basic settings -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-5">
+        <h3 class="font-semibold mb-4">基础设置 (群组: {{ gid }})</h3>
+        <div class="space-y-4">
+          {% macro setting_row(key, label, type='text', placeholder='') %}
+          <div class="flex items-center justify-between gap-4">
+            <label class="text-sm font-medium w-36 shrink-0">{{ label }}</label>
+            {% if type == 'toggle' %}
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="toggle_{{ key }}"
+                {% if conf.get(key) == '1' %}checked{% endif %}
+                onchange="setSetting('{{ gid }}', '{{ key }}', this.checked ? '1' : '')"
+                class="w-4 h-4 accent-indigo-600" />
+              <label for="toggle_{{ key }}" class="text-sm text-gray-500">启用</label>
+            </div>
+            {% else %}
+            <input type="text" value="{{ conf.get(key, '') }}" placeholder="{{ placeholder }}"
+              onblur="setSetting('{{ gid }}', '{{ key }}', this.value)"
+              class="flex-1 rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-1.5 text-sm" />
+            {% endif %}
+          </div>
+          {% endmacro %}
+
+          {{ setting_row('verify_enabled', '新成员验证', 'toggle') }}
+          {{ setting_row('welcome_msg', '欢迎消息', 'text', '欢迎 {name} 加入！') }}
+          {{ setting_row('spam_keywords', '违禁关键词', 'text', '广告,代理,招募（逗号分隔）') }}
+          {{ setting_row('auto_approve_ratings', '自动审核评价', 'toggle') }}
+          {{ setting_row('auto_approve_coupons', '自动审核优惠券', 'toggle') }}
+        </div>
+      </div>
+
+      <!-- Subscription rules -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold">强制订阅频道</h3>
+          <button onclick="addSubRule()" class="text-sm bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700">
+            + 添加频道
+          </button>
+        </div>
+        <div id="sub-rules-list" class="space-y-2">
+          {% for r in sub_rules %}
+          <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 rounded-lg px-4 py-2.5 text-sm">
+            <div>
+              <span class="font-medium">{{ r.channel_name or r.channel_id }}</span>
+              <span class="text-gray-400 ml-2 text-xs">{{ r.channel_id }}</span>
+              <span class="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{{ r.feature }}</span>
+            </div>
+            <button onclick="deleteSubRule({{ r.id }})" class="text-red-500 hover:text-red-700 text-xs">删除</button>
+          </div>
+          {% else %}
+          <p class="text-sm text-gray-400">暂无订阅规则</p>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+    {% else %}
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-8 text-center text-gray-400">
+      <p class="text-4xl mb-3">⚙️</p>
+      <p>请从左侧选择群组进行配置</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Add sub rule modal -->
+<div id="sub-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-96">
+    <h4 class="font-semibold mb-4">添加订阅频道</h4>
+    <div class="space-y-3">
+      <input id="sub-channel-id" placeholder="频道ID（如 @mychannel）"
+        class="w-full rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
+      <input id="sub-channel-name" placeholder="频道名称（显示用）"
+        class="w-full rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
+      <input id="sub-channel-url" placeholder="频道链接（可选）"
+        class="w-full rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm" />
+      <select id="sub-feature"
+        class="w-full rounded-lg border dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm">
+        <option value="all">所有功能</option>
+        <option value="list">用户列表</option>
+        <option value="nearby">附近功能</option>
+        <option value="coupon">优惠券</option>
+      </select>
+    </div>
+    <div class="flex gap-3 mt-4">
+      <button onclick="submitSubRule()" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-sm hover:bg-indigo-700">确认添加</button>
+      <button onclick="closeSubModal()" class="flex-1 bg-gray-200 dark:bg-gray-700 py-2 rounded-lg text-sm hover:bg-gray-300">取消</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  async function setSetting(gid, key, value) {
+    const fd = new FormData();
+    fd.append('gid', gid); fd.append('key', key); fd.append('value', value);
+    await fetch('/api/set', { method: 'POST', body: fd });
+  }
+
+  function addSubRule() {
+    document.getElementById('sub-modal').classList.remove('hidden');
+    document.getElementById('sub-modal').classList.add('flex');
+  }
+  function closeSubModal() {
+    document.getElementById('sub-modal').classList.add('hidden');
+    document.getElementById('sub-modal').classList.remove('flex');
+  }
+  async function submitSubRule() {
+    const body = {
+      gid: '{{ gid }}',
+      channel_id: document.getElementById('sub-channel-id').value,
+      channel_name: document.getElementById('sub-channel-name').value,
+      channel_url: document.getElementById('sub-channel-url').value,
+      feature: document.getElementById('sub-feature').value,
+    };
+    if (!body.channel_id) return alert('请输入频道ID');
+    await fetch('/api/subscriptions', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    location.reload();
+  }
+  async function deleteSubRule(id) {
+    if (!confirm('确认删除此订阅规则？')) return;
+    await fetch(`/api/subscriptions/${id}`, { method: 'DELETE' });
+    location.reload();
+  }
+</script>
+{% endblock %}
