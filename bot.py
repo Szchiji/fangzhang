@@ -276,7 +276,7 @@ def _result_actions_keyboard(results: list) -> InlineKeyboardMarkup:
         lid = r.get("lantern_id", "")
         rows.append([
             InlineKeyboardButton(text=f"🕰 收藏#{i}", callback_data=f"collect:{lid}"),
-            InlineKeyboardButton(text=f"💌 聊#{ i}", callback_data=f"anon:req:{lid}"),
+            InlineKeyboardButton(text=f"💌 聊#{i}", callback_data=f"anon:req:{lid}"),
         ])
     rows.append([InlineKeyboardButton(text="🔮 再次匹配", callback_data="cmd:match")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

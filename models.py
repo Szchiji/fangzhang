@@ -426,9 +426,13 @@ def update_recovery_task_progress(user_id: int, action: str) -> list[dict]:
 
 def try_daily_recovery(user_id: int) -> int:
     """
-    日常无违规恢复：每天最多 +1 兰花令，上限 89（弦月境底线）。
+    日常无违规恢复：每天最多 +1 兰花令。
+    仅对信用分 < 90（弦月境起始线）的用户生效；
+    恢复后分数可自然升入 90（弦月境），届时自动停止。
     返回实际增加量（0 表示今日已恢复或无需恢复）。
     """
+    from credit import DAILY_RECOVERY_CAP  # 89 = 弦月境底线（恢复目标上限）
+
     user = users_col.find_one(
         {"user_id": user_id},
         {"credit_score": 1, "last_daily_recovery": 1},
@@ -439,8 +443,9 @@ def try_daily_recovery(user_id: int) -> int:
     score = user.get("credit_score", 100)
     last_recovery = user.get("last_daily_recovery")
 
-    # 只对低于弦月境底线的用户恢复
-    if score >= 90:
+    # 只对尚未达到弦月境（<90）的用户执行恢复
+    # DAILY_RECOVERY_CAP == 89，score > 89 即 score >= 90 时停止
+    if score > DAILY_RECOVERY_CAP:
         return 0
 
     now = datetime.utcnow()
