@@ -82,7 +82,14 @@ async def main():
         setup_application(web_app, dp, bot=bot)
 
         logger.info("✅ Web 服务（Webhook + API）启动，端口 %d", port)
-        await web._run_app(web_app, host="0.0.0.0", port=port)  # noqa: SLF001
+        # 使用 AppRunner/TCPSite 在 async 上下文中启动（避免阻塞事件循环）
+        runner = web.AppRunner(web_app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", port)
+        await site.start()
+        logger.info("🌙 Webhook 服务已就绪，等待 Telegram 推送…")
+        # 保持运行直到进程终止
+        await asyncio.Event().wait()
 
     else:
         # ── 长轮询模式（本地开发，无需公开 URL）──────────────────────────
