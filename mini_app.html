@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>月影秘境 · 月影车姬</title>
+
+  <!-- Leaflet.js 地图 -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    :root {
+      --bg: #0d0d1a;
+      --surface: #1a1a2e;
+      --accent: #c8a96e;
+      --text: #e8dcc8;
+      --muted: #7a7a9a;
+      --lantern: #f0c040;
+      --lantern-glow: rgba(240, 192, 64, 0.35);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── 顶部状态栏 ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid rgba(200,169,110,0.2);
+      flex-shrink: 0;
+    }
+    header h1 {
+      font-size: 17px;
+      letter-spacing: 2px;
+      color: var(--accent);
+    }
+    #credit-display {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    #credit-display span {
+      color: var(--lantern);
+      font-weight: bold;
+    }
+
+    /* ── 过滤器栏 ── */
+    #filters {
+      display: flex;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--surface);
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    #filters select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--accent);
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* ── 地图 ── */
+    #map {
+      flex: 1;
+      width: 100%;
+    }
+    .leaflet-container {
+      background: #0a0a14 !important;
+    }
+
+    /* ── 灯笼弹出框 ── */
+    .lantern-popup {
+      font-size: 14px;
+      min-width: 200px;
+    }
+    .lantern-popup h3 {
+      color: var(--accent);
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+    .lantern-popup .auth-badge {
+      display: inline-block;
+      background: rgba(240,192,64,0.15);
+      border: 1px solid var(--lantern);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 12px;
+      color: var(--lantern);
+      margin-bottom: 6px;
+    }
+    .lantern-popup p { margin: 4px 0; color: #ccc; }
+    .lantern-popup button {
+      margin-top: 8px;
+      width: 100%;
+      padding: 6px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    /* ── 底部提示 ── */
+    #status-bar {
+      text-align: center;
+      padding: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🌙 月影秘境</h1>
+  <div id="credit-display">兰花令：<span id="credit-value">—</span></div>
+</header>
+
+<div id="filters">
+  <select id="filter-city" onchange="applyFilters()">
+    <option value="">全部城市</option>
+    <option value="台北">台北</option>
+    <option value="香港">香港</option>
+    <option value="深圳">深圳</option>
+    <option value="高雄">高雄</option>
+    <option value="台中">台中</option>
+    <option value="上海">上海</option>
+  </select>
+  <select id="filter-type" onchange="applyFilters()">
+    <option value="">全部类型</option>
+    <option value="大学生">大学生</option>
+    <option value="KH">KH</option>
+    <option value="兼职">兼职</option>
+    <option value="全职">全职</option>
+  </select>
+  <select id="filter-auth" onchange="applyFilters()">
+    <option value="0">任意真实度</option>
+    <option value="80">真实度 ≥ 80%</option>
+    <option value="90">真实度 ≥ 90%</option>
+  </select>
+</div>
+
+<div id="map"></div>
+<div id="status-bar">月下寻花，影中见真 · 点击灯笼查看详情</div>
+
+<script>
+// ────────────────────────────────────────────
+// Telegram WebApp 初始化
+// ────────────────────────────────────────────
+const tg = window.Telegram.WebApp;
+tg.expand();
+tg.ready();
+
+const userId = tg.initDataUnsafe?.user?.id || null;
+const initData = tg.initData || "";
+
+// 显示信用分（从后端获取）
+async function loadCredit() {
+  if (!userId) return;
+  try {
+    const res = await fetch(`/api/credit?user_id=${userId}&init_data=${encodeURIComponent(initData)}`);
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('credit-value').textContent = data.credit ?? '—';
+    }
+  } catch (_) { /* 离线时忽略 */ }
+}
+loadCredit();
+
+// ────────────────────────────────────────────
+// Leaflet 地图初始化（以台湾/东亚为中心）
+// ────────────────────────────────────────────
+const map = L.map('map', {
+  center: [23.5, 121.0],
+  zoom: 6,
+  zoomControl: true,
+  attributionControl: false,
+});
+
+// 深色地图瓦片（CartoDB Dark Matter）
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 18,
+  subdomains: 'abcd',
+}).addTo(map);
+
+// ────────────────────────────────────────────
+// 灯笼图标（发光月影效果）
+// ────────────────────────────────────────────
+function makeLanternIcon(authenticity) {
+  const opacity = authenticity >= 90 ? 1.0 : authenticity >= 70 ? 0.75 : 0.5;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">
+      <defs>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+      </defs>
+      <ellipse cx="18" cy="22" rx="12" ry="16" fill="rgba(240,192,64,${opacity})" filter="url(#glow)"/>
+      <ellipse cx="18" cy="22" rx="8" ry="11" fill="rgba(255,220,100,${Math.min(opacity+0.2,1)})"/>
+      <line x1="18" y1="4" x2="18" y2="8" stroke="#c8a96e" stroke-width="2"/>
+      <line x1="18" y1="36" x2="18" y2="40" stroke="#c8a96e" stroke-width="2"/>
+    </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: '',
+    iconSize: [36, 44],
+    iconAnchor: [18, 40],
+    popupAnchor: [0, -40],
+  });
+}
+
+// ────────────────────────────────────────────
+// 灯笼数据管理
+// ────────────────────────────────────────────
+let allLanterns = [];
+let markers = [];
+
+function clearMarkers() {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+}
+
+function renderLanterns(lanterns) {
+  clearMarkers();
+  lanterns.forEach(l => {
+    const icon = makeLanternIcon(l.authenticity_score ?? 60);
+    const lat = l.lat + (Math.random() - 0.5) * 0.05;  // 位置模糊
+    const lng = l.lng + (Math.random() - 0.5) * 0.05;
+
+    const authText = l.authenticity_score != null
+      ? `真实度 ${l.authenticity_score.toFixed(0)}%`
+      : '鉴真中…';
+
+    const popup = L.popup({ className: 'lantern-popup-wrapper' }).setContent(`
+      <div class="lantern-popup">
+        <h3>🏮 ${l.city} · ${l.type}</h3>
+        <div class="auth-badge">✨ ${authText}</div>
+        <p>💰 价位：${l.price_range}</p>
+        <p>📍 ${l.location_blur || '位置已模糊处理'}</p>
+        <p style="margin-top:6px;font-size:13px;color:#aaa">${(l.description || '').substring(0, 80)}…</p>
+        <button onclick="collectLantern('${l.lantern_id}')">🕰 收藏到秘匣</button>
+      </div>
+    `);
+
+    const marker = L.marker([lat, lng], { icon }).bindPopup(popup);
+    marker.addTo(map);
+    markers.push(marker);
+  });
+
+  document.getElementById('status-bar').textContent =
+    `秘境中共有 ${lanterns.length} 盏灯笼`;
+}
+
+function applyFilters() {
+  const city = document.getElementById('filter-city').value;
+  const type = document.getElementById('filter-type').value;
+  const minAuth = parseInt(document.getElementById('filter-auth').value) || 0;
+
+  const filtered = allLanterns.filter(l => {
+    if (city && l.city !== city) return false;
+    if (type && l.type !== type) return false;
+    if (minAuth && (l.authenticity_score ?? 0) < minAuth) return false;
+    return true;
+  });
+  renderLanterns(filtered);
+}
+
+// ────────────────────────────────────────────
+// 从后端加载灯笼数据
+// ────────────────────────────────────────────
+async function loadLanterns() {
+  try {
+    const res = await fetch(`/api/lanterns?init_data=${encodeURIComponent(initData)}`);
+    if (res.ok) {
+      allLanterns = await res.json();
+    } else {
+      // 离线 / 开发时使用 Demo 数据
+      allLanterns = getDemoLanterns();
+    }
+  } catch (_) {
+    allLanterns = getDemoLanterns();
+  }
+  applyFilters();
+}
+
+function getDemoLanterns() {
+  return [
+    { lantern_id: 'demo-1', city: '台北', type: '大学生', price_range: '5000-8000',
+      authenticity_score: 92, lat: 25.04, lng: 121.53, location_blur: '台北市中心 3km 内', description: '真实在校生，有本人自拍证明，服务体贴' },
+    { lantern_id: 'demo-2', city: '台北', type: 'KH', price_range: '8000-12000',
+      authenticity_score: 85, lat: 25.06, lng: 121.55, location_blur: '信义区附近', description: '专业 KH，可外出，有私人工作室' },
+    { lantern_id: 'demo-3', city: '香港', type: '兼职', price_range: '600-900 HKD',
+      authenticity_score: 78, lat: 22.32, lng: 114.17, location_blur: '九龙区 5km 内', description: '上班族兼职，周末有空，真实生活照' },
+    { lantern_id: 'demo-4', city: '高雄', type: '全职', price_range: '4000-6000',
+      authenticity_score: 95, lat: 22.63, lng: 120.30, location_blur: '苓雅区附近', description: '全职，固定工作室，照片 100% 真实' },
+  ];
+}
+
+// ────────────────────────────────────────────
+// 收藏灯笼
+// ────────────────────────────────────────────
+async function collectLantern(lanternId) {
+  if (!userId) {
+    tg.showAlert('请先通过 Telegram 机器人登录。');
+    return;
+  }
+  try {
+    const res = await fetch('/api/collect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, lantern_id: lanternId, init_data: initData }),
+    });
+    const data = await res.json();
+    tg.showAlert(data.message || '已收藏！');
+  } catch (_) {
+    tg.showAlert('收藏失败，请稍后再试。');
+  }
+}
+
+// ────────────────────────────────────────────
+// 定时刷新（每 60 秒）
+// ────────────────────────────────────────────
+loadLanterns();
+setInterval(loadLanterns, 60000);
+</script>
+
+</body>
+</html>
