@@ -24,11 +24,10 @@ import aiohttp
 from models import (
     get_lanterns_multi_filter,
     get_high_trust_lanterns,
-    lanterns_col,
+    get_approved_lanterns,
     log_metric,
 )
 from credit import get_match_multiplier
-from pymongo import DESCENDING
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +259,7 @@ async def _llm_rerank(query: str, candidates: list) -> list:
         matched = json.loads(raw)
     except Exception as e:
         logger.error("LLM 重排失败，使用规则分兜底: %s", e)
-        log_metric("llm_rerank_failure", {"error": str(e)})
+        await log_metric("llm_rerank_failure", {"error": str(e)})
 
     id_map = {l["lantern_id"][:8]: l for l in candidates}
 
@@ -310,7 +309,7 @@ async def match_lanterns(
         is_cold_start: bool,     # 是否触发全局兜底
     }
     """
-    log_metric("match_request", {"query_len": len(query)})
+    await log_metric("match_request", {"query_len": len(query)})
 
     # 1. NLU
     intent = await parse_query_intent(query)
@@ -329,24 +328,20 @@ async def match_lanterns(
     is_cold_start = False
 
     if city:
-        candidates = get_lanterns_multi_filter(city=city, resource_type=resource_type, limit=50)
+        candidates = await get_lanterns_multi_filter(city=city, resource_type=resource_type, limit=50)
 
     # 周边城市回退
     if not candidates and city:
         for nearby in NEARBY_CITIES.get(city, []):
-            candidates = get_lanterns_multi_filter(city=nearby, resource_type=resource_type, limit=30)
+            candidates = await get_lanterns_multi_filter(city=nearby, resource_type=resource_type, limit=30)
             if candidates:
                 break
 
     # 全局高可信兜底
     if not candidates:
-        candidates = get_high_trust_lanterns(limit=30)
+        candidates = await get_high_trust_lanterns(limit=30)
         if not candidates:
-            candidates = list(
-                lanterns_col.find({"status": "approved"}, {"_id": 0})
-                .sort("submitted_at", DESCENDING)
-                .limit(30)
-            )
+            candidates = await get_approved_lanterns(limit=30)
         is_cold_start = True
 
     # 去重
@@ -360,7 +355,7 @@ async def match_lanterns(
     candidates = unique
 
     if not candidates:
-        log_metric("match_empty_result", {"city": city, "type": resource_type})
+        await log_metric("match_empty_result", {"city": city, "type": resource_type})
         return {
             "results": [],
             "parsed_intent": intent,
@@ -395,7 +390,7 @@ async def match_lanterns(
             f"检测到高危词汇「{kws}」\n"
             "⚠️ 请务必当面验证身份，切勿提前转账、充值或付定金！"
         )
-        log_metric("anti_fraud_triggered", {"keywords": triggered})
+        await log_metric("anti_fraud_triggered", {"keywords": triggered})
 
     # 5. LLM 重排（Stage 2）
     results = await _llm_rerank(query, top_candidates)
@@ -408,7 +403,7 @@ async def match_lanterns(
             l.setdefault("match_reason", "综合评分推荐")
             l.setdefault("risk_tip", "")
 
-    log_metric("match_success", {"result_count": len(results), "is_cold_start": is_cold_start})
+    await log_metric("match_success", {"result_count": len(results), "is_cold_start": is_cold_start})
 
     return {
         "results": results,

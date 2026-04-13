@@ -8,20 +8,33 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - mongo
+      postgres:
+        condition: service_healthy
     networks:
       - yueyingnet
+    environment:
+      # Docker Compose 中使用服务名访问 PostgreSQL
+      DATABASE_URL: "postgresql://yueyinguser:yueyingpass@postgres:5432/yueyingcheji"
 
-  mongo:
-    image: mongo:7.0
+  postgres:
+    image: postgres:16-alpine
     restart: unless-stopped
+    environment:
+      POSTGRES_USER: yueyinguser
+      POSTGRES_PASSWORD: yueyingpass
+      POSTGRES_DB: yueyingcheji
     volumes:
-      - mongo_data:/data/db
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - yueyingnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yueyinguser -d yueyingcheji"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  mongo_data:
+  postgres_data:
 
 networks:
   yueyingnet:
