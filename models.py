@@ -22,6 +22,8 @@ db = client["yueyingcheji"]
 users_col = db["users"]
 lanterns_col = db["lanterns"]
 chats_col = db["anonymous_chats"]
+metrics_col = db["metrics"]
+chat_requests_col = db["chat_requests"]
 
 # --- 索引（首次启动时建立） ---
 def create_indexes():
