@@ -1,10 +1,11 @@
 import os
-from aiogram import Router, types
+from aiogram import Router, types, Bot
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from db import db_exec, db_query_one
 
 router = Router()
+ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
 
 BASE_URL = os.getenv("RAILWAY_STATIC_URL", "")
 if BASE_URL:
@@ -27,13 +28,32 @@ def _ensure_user(uid: int, username: str | None, full_name: str):
     )
 
 
+async def _is_admin_user(bot: Bot, msg: types.Message) -> bool:
+    if msg.from_user.id in ADMIN_IDS:
+        return True
+    if msg.chat.type == "private":
+        return False
+    try:
+        member = await bot.get_chat_member(msg.chat.id, msg.from_user.id)
+        return member.status in ("creator", "administrator")
+    except Exception:
+        return False
+
+
 @router.message(Command("start"))
-async def cmd_start(msg: types.Message):
+async def cmd_start(msg: types.Message, bot: Bot):
     uid = msg.from_user.id
     username = msg.from_user.username
     full_name = msg.from_user.full_name
 
     _ensure_user(uid, username, full_name)
+
+    is_admin = await _is_admin_user(bot, msg)
+    cert = db_query_one(
+        "SELECT id FROM certified_users WHERE uid=%s AND status='active' AND (valid_until IS NULL OR valid_until > NOW())",
+        (uid,),
+    )
+    is_certified = bool(cert)
 
     if msg.chat.type != "private":
         gid = str(msg.chat.id)
@@ -47,11 +67,21 @@ async def cmd_start(msg: types.Message):
     kb.button(text="✅ 每日签到", callback_data="menu:checkin")
     kb.button(text="📍 附近推荐", callback_data="menu:nearby")
     kb.button(text="⭐ 积分任务", callback_data="menu:tasks")
-    kb.button(text="🖥️ 管理后台", url=f"{BASE_URL}/dashboard")
-    kb.adjust(2, 2, 1)
+    if is_certified:
+        kb.button(text="🎫 发布优惠券", callback_data="menu:coupon")
+    if is_admin:
+        kb.button(text="🖥️ 管理后台", url=f"{BASE_URL}/dashboard")
+    kb.adjust(2, 2, 2)
+
+    roles = ["普通用户"]
+    if is_certified:
+        roles.append("认证用户")
+    if is_admin:
+        roles.append("管理员")
 
     await msg.answer(
         "<b>🤖 CheBot — 认证用户管理平台</b>\n\n"
+        f"当前角色：<b>{' / '.join(roles)}</b>\n\n"
         "功能菜单：\n"
         "• /list — 浏览认证用户\n"
         "• /search — 搜索用户\n"
@@ -105,3 +135,5 @@ async def menu_callback(callback: types.CallbackQuery):
         await callback.message.answer("请使用 /nearby [城市] 查找附近用户")
     elif action == "tasks":
         await callback.message.answer("请使用 /tasks 查看今日任务")
+    elif action == "coupon":
+        await callback.message.answer("请使用 /coupon 发布优惠券")

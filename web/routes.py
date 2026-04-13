@@ -5,7 +5,21 @@ from fastapi.templating import Jinja2Templates
 from aiogram import Bot
 from db import db_exec, db_query, db_query_one
 
-CHANNEL_ID = os.getenv("PUBLISH_CHANNEL_ID", "")
+DEFAULT_CHANNEL_ID = os.getenv("PUBLISH_CHANNEL_ID", "")
+
+
+class _SafeFormatDict(dict):
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+def _get_global_setting(key: str, default: str = "") -> str:
+    row = db_query_one("SELECT value FROM settings WHERE gid='global' AND key=%s", (key,))
+    return row["value"] if row and row.get("value") else default
+
+
+def _render_push_template(template: str, context: dict) -> str:
+    return template.format_map(_SafeFormatDict(context))
 
 
 def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
@@ -70,7 +84,7 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
 
     @app.get("/settings", response_class=HTMLResponse)
     async def page_settings(request: Request, gid: str = ""):
-        groups = db_query("SELECT * FROM groups ORDER BY created_at DESC")
+        groups = [{"gid": "global", "gname": "🌐 全局配置"}] + db_query("SELECT * FROM groups ORDER BY created_at DESC")
         conf = {}
         sub_rules = []
         if gid:
@@ -243,19 +257,29 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
         c = db_query_one("SELECT * FROM coupons WHERE id = %s", (cid,))
         if not c:
             raise HTTPException(404)
-        if not CHANNEL_ID:
+        channel_id = _get_global_setting("publish_channel_id", DEFAULT_CHANNEL_ID)
+        if not channel_id:
             # Approve without publishing — no channel configured
             db_exec("UPDATE coupons SET status='approved' WHERE id=%s", (cid,))
-            return {"status": "ok", "published": False, "note": "PUBLISH_CHANNEL_ID not set"}
-        text = (
-            f"🎫 <b>优惠券</b>\n\n"
-            f"📌 {c['title']}\n"
-            f"📝 {c['description']}\n"
-            f"💰 折扣: {c['discount']}\n"
-            f"📅 有效期至: {c['valid_until']}"
+            return {"status": "ok", "published": False, "note": "publish_channel_id not set"}
+        cu = db_query_one("SELECT display_name FROM certified_users WHERE id = %s", (c["certified_user_id"],))
+        coupon_template = _get_global_setting(
+            "coupon_push_template",
+            "🎫 <b>优惠券</b>\n\n👤 发布者: {display_name}\n📌 {title}\n📝 {description}\n💰 折扣: {discount}\n📅 有效期至: {valid_until}\n\n详情: /user_{certified_user_id}",
+        )
+        text = _render_push_template(
+            coupon_template,
+            {
+                "title": c.get("title", ""),
+                "description": c.get("description", ""),
+                "discount": c.get("discount", ""),
+                "valid_until": c.get("valid_until", ""),
+                "certified_user_id": c.get("certified_user_id", ""),
+                "display_name": cu["display_name"] if cu else "认证用户",
+            },
         )
         try:
-            await bot.send_message(CHANNEL_ID, text)
+            await bot.send_message(channel_id, text)
             db_exec("UPDATE coupons SET status='published', published_at=NOW() WHERE id=%s", (cid,))
         except Exception as exc:
             db_exec("UPDATE coupons SET status='approved' WHERE id=%s", (cid,))
