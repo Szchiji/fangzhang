@@ -20,7 +20,7 @@ def _get_global_setting(key: str, default: str = "") -> str:
 
 
 def _render_push_template(template: str, context: dict) -> str:
-    return template.format_map(_SafeFormatDict(context))
+    return template.replace("\\n", "\n").format_map(_SafeFormatDict(context))
 
 
 def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):

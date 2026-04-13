@@ -71,9 +71,9 @@ async def cmd_start(msg: types.Message, bot: Bot):
         kb.button(text="🎫 发布优惠券", callback_data="menu:coupon")
     if is_admin:
         kb.button(text="🖥️ 管理后台", url=f"{BASE_URL}/dashboard")
-    last_row = int(is_certified) + int(is_admin)
-    if last_row:
-        kb.adjust(2, 2, last_row)
+    last_row_button_count = int(is_certified) + int(is_admin)
+    if last_row_button_count:
+        kb.adjust(2, 2, last_row_button_count)
     else:
         kb.adjust(2, 2)
 

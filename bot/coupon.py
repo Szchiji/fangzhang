@@ -24,7 +24,7 @@ class _SafeFormatDict(dict):
 
 
 def _render_push_template(template: str, context: dict) -> str:
-    return template.format_map(_SafeFormatDict(context))
+    return template.replace("\\n", "\n").format_map(_SafeFormatDict(context))
 
 
 class CouponStates(StatesGroup):

@@ -33,7 +33,7 @@ class _SafeFormatDict(dict):
 
 
 def _render_push_template(template: str, context: dict) -> str:
-    return template.format_map(_SafeFormatDict(context))
+    return template.replace("\\n", "\n").format_map(_SafeFormatDict(context))
 
 
 class AddUserStates(StatesGroup):
@@ -378,7 +378,7 @@ async def cmd_push(msg: types.Message, bot: Bot):
             "display_name": u.get("display_name", ""),
             "level_stars": level_stars,
             "region_line": region_line,
-            "trust_score": f"{float(u.get('trust_score', 0)):.1f}",
+            "trust_score": float(u.get("trust_score", 0)),
             "bio": u.get("bio", ""),
             "tags": tags,
             "certified_user_id": cert_id,
