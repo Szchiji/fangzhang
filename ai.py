@@ -25,6 +25,8 @@ GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
 TONGYI_API_KEY = os.environ.get("TONGYI_API_KEY", "")
 
 GROK_ENDPOINT = "https://api.x.ai/v1/chat/completions"
+# Tongyi Qianwen uses an OpenAI-compatible endpoint; see:
+# https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope
 TONGYI_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 
 AI_API_KEY = GROK_API_KEY or TONGYI_API_KEY
@@ -55,7 +57,10 @@ async def _call_ai(messages: list, temperature: float = 0.3) -> str:
         async with session.post(AI_ENDPOINT, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
             resp.raise_for_status()
             data = await resp.json()
-            return data["choices"][0]["message"]["content"].strip()
+            choices = data.get("choices")
+            if not choices or not isinstance(choices, list):
+                raise ValueError(f"Unexpected AI response format: {data}")
+            return choices[0]["message"]["content"].strip()
 
 
 async def match_lanterns(query: str, city_hint: str = "") -> list:

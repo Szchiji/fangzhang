@@ -29,6 +29,9 @@ def create_indexes():
     users_col.create_index([("user_id", ASCENDING)], unique=True)
     lanterns_col.create_index([("city", ASCENDING), ("status", ASCENDING)])
     lanterns_col.create_index([("submitted_at", DESCENDING)])
+    # TTL index: MongoDB automatically deletes documents once their `expires_at`
+    # timestamp is reached (expireAfterSeconds=0 means "expire at the field's value",
+    # not "expire immediately"). This powers the 24-hour auto-destroy for anonymous chats.
     chats_col.create_index([("expires_at", ASCENDING)], expireAfterSeconds=0)
 
 

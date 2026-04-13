@@ -264,8 +264,11 @@ async def submit_done(message: Message, state: FSMContext):
         reply_markup=main_menu_keyboard(),
     )
 
-    # 通知 AI 异步鉴真（不阻塞用户）
-    asyncio.create_task(_async_analyze(lantern_id, data["photo_file_ids"]))
+    # Notify AI for async authenticity analysis (store task ref to avoid silent failures)
+    task = asyncio.create_task(_async_analyze(lantern_id, data["photo_file_ids"]))
+    task.add_done_callback(
+        lambda t: logger.error("鉴真任务异常: %s", t.exception()) if t.exception() else None
+    )
 
     # 奖励投稿者兰花令
     update_credit(message.from_user.id, +10, "投稿灯笼资源")
