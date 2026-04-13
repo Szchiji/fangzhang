@@ -39,7 +39,7 @@ async def run_bot_polling():
         await dp.start_polling(bot)
     except TelegramConflictError:
         logger.error(
-            "Telegram polling conflict detected; disable polling on duplicate instances with ENABLE_BOT_POLLING=false."
+            "Telegram polling conflict detected; disable polling on duplicate instances with ENABLE_BOT_POLLING=false (or 0/no/off)."
         )
 
 
