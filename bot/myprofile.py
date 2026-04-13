@@ -82,7 +82,7 @@ async def cmd_myprofile(msg: types.Message):
     status_label = cert_status_label(cert)
     expiry_text = cert_expiry_text(cert)
     region_city = " · ".join(
-        filter(None, [cert.get("region"), cert.get("city")])
+        filter(lambda x: x and x.strip(), [cert.get("region"), cert.get("city")])
     )
     bio_line = f"\n📝 {cert['bio']}" if cert.get("bio") else ""
 

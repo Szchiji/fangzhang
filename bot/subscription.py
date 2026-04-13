@@ -2,6 +2,7 @@ from aiogram import Router, types, Bot
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from db import db_query, db_query_one
+from bot.roles import _format_channel_names
 
 router = Router()
 
@@ -61,7 +62,7 @@ async def cmd_subscribe(msg: types.Message, bot: Bot):
         )
         return
 
-    names = "、".join(ch.get("channel_name") or ch["channel_id"] for ch in unsubscribed)
+    names = _format_channel_names(unsubscribed)
     await msg.reply(
         f"🔒 <b>需要完成订阅才能使用功能</b>\n\n"
         f"还需订阅以下 {len(unsubscribed)} 个频道：<b>{names}</b>\n\n"
@@ -83,7 +84,7 @@ async def on_recheck(callback: types.CallbackQuery, bot: Bot):
             "您已订阅所有必需频道，现在可以使用本群的全部功能。"
         )
     else:
-        names = "、".join(ch.get("channel_name") or ch["channel_id"] for ch in unsubscribed)
+        names = _format_channel_names(unsubscribed)
         await callback.message.edit_reply_markup(
             reply_markup=build_subscription_keyboard(unsubscribed)
         )

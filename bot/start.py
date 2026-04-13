@@ -166,7 +166,7 @@ async def cmd_start(msg: types.Message, bot: Bot):
     uid = msg.from_user.id
     username = msg.from_user.username
     full_name = msg.from_user.full_name
-    name = msg.from_user.first_name or full_name
+    name = msg.from_user.first_name or full_name or username or "用户"
 
     _ensure_user(uid, username, full_name)
 

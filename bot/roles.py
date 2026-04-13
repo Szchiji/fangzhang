@@ -90,7 +90,14 @@ def subscription_status_text(unsubscribed: list[dict]) -> str:
     """Return a human-readable subscription gate message."""
     if not unsubscribed:
         return "✅ 已订阅所有必需频道"
-    names = "、".join(
-        ch.get("channel_name") or ch["channel_id"] for ch in unsubscribed
-    )
-    return f"🔒 尚未订阅：{names}"
+    return f"🔒 尚未订阅 {len(unsubscribed)} 个频道：{_format_channel_names(unsubscribed)}"
+
+
+def _format_channel_names(channels: list[dict], max_items: int = 3) -> str:
+    """Format channel names for display, truncating if there are many."""
+    names = [ch.get("channel_name") or ch["channel_id"] for ch in channels]
+    if len(names) <= max_items:
+        return "、".join(names)
+    shown = "、".join(names[:max_items])
+    remaining = len(names) - max_items
+    return f"{shown} 等 {remaining} 个"
