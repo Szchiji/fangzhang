@@ -6,6 +6,7 @@ from aiogram import Bot
 from db import db_exec, db_query, db_query_one
 
 DEFAULT_CHANNEL_ID = os.getenv("PUBLISH_CHANNEL_ID", "")
+GLOBAL_SETTINGS_GROUP = {"gid": "global", "gname": "🌐 全局配置"}
 
 
 class _SafeFormatDict(dict):
@@ -84,7 +85,7 @@ def setup_routes(app: FastAPI, bot: Bot, templates: Jinja2Templates):
 
     @app.get("/settings", response_class=HTMLResponse)
     async def page_settings(request: Request, gid: str = ""):
-        groups = [{"gid": "global", "gname": "🌐 全局配置"}] + db_query("SELECT * FROM groups ORDER BY created_at DESC")
+        groups = [GLOBAL_SETTINGS_GROUP] + db_query("SELECT * FROM groups ORDER BY created_at DESC")
         conf = {}
         sub_rules = []
         if gid:

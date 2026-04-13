@@ -57,6 +57,9 @@
           {{ setting_row('publish_channel_id', '推送频道ID', 'text', '@mychannel') }}
           {{ setting_row('profile_push_template', '用户推送模板', 'text', '✅ <b>{display_name}</b>\\n{bio}\\n详情: /user_{certified_user_id}') }}
           {{ setting_row('coupon_push_template', '优惠券推送模板', 'text', '🎫 <b>优惠券</b>\\n{title}\\n{discount}\\n详情: /user_{certified_user_id}') }}
+          <p class="text-xs text-gray-500">
+            模板占位符示例：{display_name} {bio} {title} {description} {discount} {valid_until} {certified_user_id} {region} {city} {contact} {level_stars} {trust_score} {tags}
+          </p>
           {% endif %}
         </div>
       </div>
