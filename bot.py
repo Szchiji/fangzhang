@@ -61,7 +61,8 @@ from models import (
     get_chat_request,
     accept_chat_request,
     decline_chat_request,
-    lanterns_col,
+    get_lantern_by_id,
+    update_lantern_fields,
 )
 from ai import match_lanterns, analyze_authenticity, score_session_quality, check_anti_fraud
 from credit import (
@@ -180,7 +181,7 @@ async def _check_eclipse(user_id: int, restriction: str, target) -> bool:
     检查遮蔽限制。受限则发送提示并返回 True（调用方应 return）。
     target: Message 或 CallbackQuery。
     """
-    user = get_or_create_user(user_id)
+    user = await get_or_create_user(user_id)
     score = user.get("credit_score", 100)
     if not has_restriction(score, restriction):
         return False
@@ -198,10 +199,10 @@ async def _check_rate_limit(user_id: int, action_type: str, target) -> bool:
     """
     检查速率限制。超限则发提示、扣分并返回 True。
     """
-    timestamps = get_action_timestamps(user_id, action_type)
+    timestamps = await get_action_timestamps(user_id, action_type)
     allowed, remaining = check_rate_limit(timestamps, action_type)
     if allowed:
-        record_action_timestamp(user_id, action_type)
+        await record_action_timestamp(user_id, action_type)
         return False
 
     from credit import RATE_LIMITS
@@ -218,18 +219,18 @@ async def _check_rate_limit(user_id: int, action_type: str, target) -> bool:
         await target.answer(msg)
 
     # 超限扣分
-    update_credit(user_id, RATE_LIMIT_PENALTY, "触发速率限制")
-    log_metric("rate_limit_hit", {"user_id": user_id, "action": action_type})
+    await update_credit(user_id, RATE_LIMIT_PENALTY, "触发速率限制")
+    await log_metric("rate_limit_hit", {"user_id": user_id, "action": action_type})
     return True
 
 
-def _apply_eclipse_if_needed(user_id: int):
+async def _apply_eclipse_if_needed(user_id: int):
     """若信用分进入遮蔽区间，自动分配修行任务。"""
-    user = get_or_create_user(user_id)
+    user = await get_or_create_user(user_id)
     score = user.get("credit_score", 100)
     tasks = assign_recovery_tasks(score)
     if tasks:
-        assign_recovery_tasks_to_user(user_id, tasks)
+        await assign_recovery_tasks_to_user(user_id, tasks)
 
 
 def _notify_recovery_completions(newly_completed: list) -> str:
@@ -288,7 +289,7 @@ def _result_actions_keyboard(results: list) -> InlineKeyboardMarkup:
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-    user = get_or_create_user(
+    user = await get_or_create_user(
         user_id=message.from_user.id,
         username=message.from_user.username or "",
         full_name=message.from_user.full_name or "",
@@ -296,7 +297,7 @@ async def cmd_start(message: Message):
     credit = user.get("credit_score", 100)
 
     # 日常无违规恢复
-    recovered = try_daily_recovery(message.from_user.id)
+    recovered = await try_daily_recovery(message.from_user.id)
     recovery_note = f"\n🌱 今日恢复 <b>+{recovered}</b> 兰花令" if recovered else ""
 
     badge = format_tier_badge(credit)
@@ -321,7 +322,7 @@ async def cb_match(callback: CallbackQuery, state: FSMContext):
         return
 
     # 展示上次偏好提示
-    prefs = get_user_preferences(callback.from_user.id)
+    prefs = await get_user_preferences(callback.from_user.id)
     hint = ""
     if prefs.get("city") or prefs.get("type"):
         parts = []
@@ -355,7 +356,7 @@ async def handle_match_query(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("🌙 月影媒婆正在月下为你寻灯……请稍候 ✨")
 
-    user_prefs = get_user_preferences(message.from_user.id)
+    user_prefs = await get_user_preferences(message.from_user.id)
 
     try:
         result = await match_lanterns(query, user_prefs=user_prefs)
@@ -391,8 +392,8 @@ async def handle_match_query(message: Message, state: FSMContext):
         return
 
     # 保存偏好
-    save_user_preferences(message.from_user.id, intent)
-    log_behavior(message.from_user.id, "match", metadata={"city": intent.get("city"), "type": intent.get("type")})
+    await save_user_preferences(message.from_user.id, intent)
+    await log_behavior(message.from_user.id, "match", metadata={"city": intent.get("city"), "type": intent.get("type")})
 
     cold_note = result.get("is_cold_start", False)
     text = _format_match_result(results, intent, cold_note)
@@ -412,7 +413,7 @@ async def handle_city_followup(message: Message, state: FSMContext):
 
     await message.answer("🌙 媒婆已记下，重新为你寻灯……")
 
-    user_prefs = get_user_preferences(message.from_user.id)
+    user_prefs = await get_user_preferences(message.from_user.id)
     try:
         result = await match_lanterns(combined_query, city_hint=city, user_prefs=user_prefs)
     except Exception as e:
@@ -429,7 +430,7 @@ async def handle_city_followup(message: Message, state: FSMContext):
         return
 
     intent = result.get("parsed_intent", {})
-    save_user_preferences(message.from_user.id, intent)
+    await save_user_preferences(message.from_user.id, intent)
     text = _format_match_result(results, intent, result.get("is_cold_start", False))
     await message.answer(text, reply_markup=_result_actions_keyboard(results))
 
@@ -442,8 +443,8 @@ async def handle_city_followup(message: Message, state: FSMContext):
 async def cb_collect(callback: CallbackQuery):
     await callback.answer()
     lantern_id = callback.data.split(":", 1)[1]
-    collect_lantern(callback.from_user.id, lantern_id)
-    log_behavior(callback.from_user.id, "collect", lantern_id)
+    await collect_lantern(callback.from_user.id, lantern_id)
+    await log_behavior(callback.from_user.id, "collect", lantern_id)
     await callback.message.answer("🕰 已收藏到你的时光秘匣！")
 
 
@@ -514,7 +515,7 @@ async def submit_done(message: Message, state: FSMContext):
         await message.answer("请至少上传一张照片。")
         return
 
-    lantern_id = create_lantern(
+    lantern_id = await create_lantern(
         city=data["city"],
         resource_type=data["resource_type"],
         price_range=data["price_range"],
@@ -535,7 +536,7 @@ async def submit_done(message: Message, state: FSMContext):
     task.add_done_callback(
         lambda t: logger.error("鉴真任务异常: %s", t.exception()) if t.exception() else None
     )
-    update_credit(message.from_user.id, +10, "投稿灯笼资源")
+    await update_credit(message.from_user.id, +10, "投稿灯笼资源")
 
 
 async def _async_analyze(lantern_id: str, photo_file_ids: list):
@@ -546,30 +547,27 @@ async def _async_analyze(lantern_id: str, photo_file_ids: list):
         labels = result.get("labels", [])
         needs_review = result.get("needs_review", False)
 
-        update_data = {
+        fields = {
             "authenticity_score": score,
             "authenticity_labels": labels,
             "updated_at": datetime.utcnow(),
         }
         if needs_review:
-            update_data["needs_human_review"] = True
+            fields["needs_human_review"] = True
 
-        lanterns_col.update_one(
-            {"lantern_id": lantern_id},
-            {"$set": update_data},
-        )
+        await update_lantern_fields(lantern_id, fields)
         logger.info("灯笼 %s 鉴真评分：%.1f | 标签：%s | 需人工：%s",
                     lantern_id, score, labels, needs_review)
 
         # 若真实度极低，扣除投稿者信用
         if score < 40:
-            lantern = lanterns_col.find_one({"lantern_id": lantern_id}, {"submitted_by": 1})
+            lantern = await get_lantern_by_id(lantern_id)
             if lantern and lantern.get("submitted_by"):
                 uid = lantern["submitted_by"]
-                update_credit(uid, -20, "照片鉴真不合格")
-                _apply_eclipse_if_needed(uid)
+                await update_credit(uid, -20, "照片鉴真不合格")
+                await _apply_eclipse_if_needed(uid)
                 # 推进修行任务中"无违规"类任务的清零
-                update_recovery_task_progress(uid, "violation")
+                await update_recovery_task_progress(uid, "violation")
     except Exception as e:
         logger.error("AI 鉴真失败 %s: %s", lantern_id, e)
 
@@ -584,9 +582,9 @@ async def cb_credit(callback: CallbackQuery):
     user_id = callback.from_user.id
 
     # 日常恢复
-    recovered = try_daily_recovery(user_id)
+    recovered = await try_daily_recovery(user_id)
 
-    user = get_or_create_user(user_id)
+    user = await get_or_create_user(user_id)
     report = format_credit_report(user)
 
     recovery_note = f"\n🌱 今日恢复 <b>+{recovered}</b> 兰花令" if recovered else ""
@@ -603,7 +601,7 @@ async def cb_credit(callback: CallbackQuery):
 @router.callback_query(F.data == "cmd:collection")
 async def cb_collection(callback: CallbackQuery):
     await callback.answer()
-    user = get_or_create_user(callback.from_user.id)
+    user = await get_or_create_user(callback.from_user.id)
     collected = user.get("collected_lanterns", [])
 
     if not collected:
@@ -655,7 +653,7 @@ async def cb_request_anon_chat(callback: CallbackQuery):
         return
 
     lantern_id = callback.data.split(":", 2)[2]
-    lantern = lanterns_col.find_one({"lantern_id": lantern_id}, {"submitted_by": 1, "city": 1, "type": 1})
+    lantern = await get_lantern_by_id(lantern_id)
     if not lantern:
         await callback.message.answer("该灯笼已不存在。")
         return
@@ -665,7 +663,7 @@ async def cb_request_anon_chat(callback: CallbackQuery):
         await callback.message.answer("无法向自己的灯笼发起月影会话。")
         return
 
-    request_id = create_chat_request(callback.from_user.id, lantern_id, owner_id)
+    request_id = await create_chat_request(callback.from_user.id, lantern_id, owner_id)
 
     # 通知灯笼主
     consent_kb = InlineKeyboardMarkup(
@@ -692,7 +690,7 @@ async def cb_request_anon_chat(callback: CallbackQuery):
         "💌 申请已发送，等待灯笼主回应。\n"
         "对方同意后，你将收到通知并进入月影会话 🌙"
     )
-    log_metric("anon_chat_requested", {"requester": callback.from_user.id, "lantern": lantern_id})
+    await log_metric("anon_chat_requested", {"requester": callback.from_user.id, "lantern": lantern_id})
 
 
 @router.callback_query(F.data.startswith("anon:accept:"))
@@ -700,7 +698,7 @@ async def cb_anon_accept(callback: CallbackQuery, state: FSMContext):
     """灯笼主同意申请，创建匿名会话并通知双方。"""
     await callback.answer()
     request_id = callback.data.split(":", 2)[2]
-    req = accept_chat_request(request_id)
+    req = await accept_chat_request(request_id)
     if not req:
         await callback.message.answer("该申请已过期或不存在。")
         return
@@ -709,7 +707,7 @@ async def cb_anon_accept(callback: CallbackQuery, state: FSMContext):
     owner_id = req["lantern_owner_id"]
 
     # 创建匿名会话
-    chat_id = create_anonymous_chat(requester_id, owner_id)
+    chat_id = await create_anonymous_chat(requester_id, owner_id)
 
     # 灯笼主进入 AnonChat 状态
     await state.set_state(AnonChat.active)
@@ -738,7 +736,7 @@ async def cb_anon_accept(callback: CallbackQuery, state: FSMContext):
     except Exception as e:
         logger.error("通知申请方失败 requester=%s: %s", requester_id, e)
 
-    log_metric("anon_chat_started", {"chat_id": chat_id})
+    await log_metric("anon_chat_started", {"chat_id": chat_id})
 
 
 @router.callback_query(F.data.startswith("anon:decline:"))
@@ -746,9 +744,9 @@ async def cb_anon_decline(callback: CallbackQuery):
     """灯笼主婉拒申请。"""
     await callback.answer()
     request_id = callback.data.split(":", 2)[2]
-    req = get_chat_request(request_id)
+    req = await get_chat_request(request_id)
     if req:
-        decline_chat_request(request_id)
+        await decline_chat_request(request_id)
         try:
             await bot.send_message(
                 req["requester_id"],
@@ -764,7 +762,7 @@ async def cb_anon_enter(callback: CallbackQuery, state: FSMContext):
     """申请方点击进入会话。"""
     await callback.answer()
     chat_id = callback.data.split(":", 2)[2]
-    chat = get_chat_by_id(chat_id)
+    chat = await get_chat_by_id(chat_id)
     if not chat:
         await callback.message.answer("该月影会话已失效。")
         return
@@ -803,11 +801,11 @@ async def handle_anon_message(message: Message, state: FSMContext):
     # 记录消息
     text = message.text or ""
     if text:
-        append_message(chat_id, message.from_user.id, text)
+        await append_message(chat_id, message.from_user.id, text)
 
     # 记录照片
     if message.photo:
-        mark_photo_shared(chat_id, message.from_user.id)
+        await mark_photo_shared(chat_id, message.from_user.id)
 
     # 转发给对方
     try:
@@ -839,7 +837,7 @@ async def cb_anon_end(callback: CallbackQuery, state: FSMContext):
     chat_id = data.get("chat_id") or callback.data.split(":", 2)[2]
     other_user_id = data.get("other_user_id")
 
-    end_chat_naturally(chat_id)
+    await end_chat_naturally(chat_id)
     await state.set_state(AnonChat.rating)
     await state.update_data(chat_id=chat_id, other_user_id=other_user_id)
 
@@ -873,7 +871,7 @@ async def cb_rate_session(callback: CallbackQuery, state: FSMContext):
     if await _check_rate_limit(user_id, "rate", callback):
         return
 
-    session = rate_session(chat_id, user_id, stars)
+    session = await rate_session(chat_id, user_id, stars)
     await state.clear()
 
     await callback.message.answer(f"⭐ 已提交 {'⭐' * stars} 评分，感谢你的反馈！")
@@ -924,17 +922,17 @@ async def cb_rate_session(callback: CallbackQuery, state: FSMContext):
         reason = "月影会话评分结算"
         if gaming:
             reason = "月影会话结算（刷分检测）"
-        update_credit(uid, delta, reason)
-        _apply_eclipse_if_needed(uid)
+        await update_credit(uid, delta, reason)
+        await _apply_eclipse_if_needed(uid)
 
         # 推进修行任务
         task_action = "session_good_4plus" if their_rating >= 4 else ""
         if task_action:
-            newly_done = update_recovery_task_progress(uid, task_action)
+            newly_done = await update_recovery_task_progress(uid, task_action)
         else:
             newly_done = []
         for done_task in newly_done:
-            update_credit(uid, done_task["reward"], f"修行任务完成：{done_task['description']}")
+            await update_credit(uid, done_task["reward"], f"修行任务完成：{done_task['description']}")
 
         summary = format_session_credit_summary(breakdown, delta)
         task_note = _notify_recovery_completions(newly_done)
@@ -944,7 +942,7 @@ async def cb_rate_session(callback: CallbackQuery, state: FSMContext):
             logger.error("发送结算消息失败 uid=%s: %s", uid, e)
 
     if gaming:
-        log_metric("session_gaming_detected", {"chat_id": chat_id})
+        await log_metric("session_gaming_detected", {"chat_id": chat_id})
 
 
 # ---------------------------------------------------------------------------
@@ -990,7 +988,7 @@ async def cb_reveal_ok(callback: CallbackQuery, state: FSMContext):
     chat_id = parts[2]
     requester_id = int(parts[3])
 
-    chat = get_chat_by_id(chat_id)
+    chat = await get_chat_by_id(chat_id)
     if not chat:
         await callback.message.answer("会话已失效。")
         return
@@ -1030,7 +1028,7 @@ async def cmd_admin_pending(message: Message):
     if not is_admin(message.from_user.id):
         return
 
-    pending = get_pending_lanterns(limit=5)
+    pending = await get_pending_lanterns(limit=5)
     if not pending:
         await message.answer("✅ 暂无待审核灯笼。")
         return
@@ -1071,17 +1069,17 @@ async def cb_admin_approve(callback: CallbackQuery):
         await callback.answer("无权限", show_alert=True)
         return
     lantern_id = callback.data.split(":", 2)[2]
-    approve_lantern(lantern_id)
+    await approve_lantern(lantern_id)
 
     # 奖励投稿者
-    lantern = lanterns_col.find_one({"lantern_id": lantern_id}, {"submitted_by": 1})
+    lantern = await get_lantern_by_id(lantern_id)
     if lantern and lantern.get("submitted_by"):
         uid = lantern["submitted_by"]
-        update_credit(uid, +15, "灯笼审核通过")
+        await update_credit(uid, +15, "灯笼审核通过")
         # 推进修行任务
-        newly_done = update_recovery_task_progress(uid, "lantern_approved")
+        newly_done = await update_recovery_task_progress(uid, "lantern_approved")
         for t in newly_done:
-            update_credit(uid, t["reward"], f"修行任务完成：{t['description']}")
+            await update_credit(uid, t["reward"], f"修行任务完成：{t['description']}")
 
     await callback.answer("✅ 已通过", show_alert=True)
     caption = (callback.message.caption or "") + "\n\n<b>✅ 已审核通过</b>"
@@ -1097,14 +1095,14 @@ async def cb_admin_reject(callback: CallbackQuery):
         await callback.answer("无权限", show_alert=True)
         return
     lantern_id = callback.data.split(":", 2)[2]
-    reject_lantern(lantern_id)
+    await reject_lantern(lantern_id)
 
     # 扣除投稿者信用
-    lantern = lanterns_col.find_one({"lantern_id": lantern_id}, {"submitted_by": 1})
+    lantern = await get_lantern_by_id(lantern_id)
     if lantern and lantern.get("submitted_by"):
         uid = lantern["submitted_by"]
-        update_credit(uid, -20, "灯笼审核不通过")
-        _apply_eclipse_if_needed(uid)
+        await update_credit(uid, -20, "灯笼审核不通过")
+        await _apply_eclipse_if_needed(uid)
 
     await callback.answer("❌ 已拒绝", show_alert=True)
     if callback.message.photo:
@@ -1142,7 +1140,7 @@ async def group_anti_fraud_monitor(message: Message):
             f"检测到高危词汇「{kws}」\n"
             "⚠️ 请勿提前转账、充值或付定金！"
         )
-        log_metric("group_anti_fraud_triggered", {
+        await log_metric("group_anti_fraud_triggered", {
             "chat_id": message.chat.id,
             "user_id": message.from_user.id,
             "keywords": triggered,

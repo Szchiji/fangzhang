@@ -8,7 +8,8 @@ YueYingCheJiBot - Web API for Mini App
   POST /api/collect   — 收藏灯笼到时光秘匣
   GET  /mini_app.html — 返回 Mini App 页面
 
-使用 aiohttp 轻量 Web 框架，与 aiogram Bot 共存运行。
+使用 aiohttp 轻量 Web 框架，与 aiogram Bot Webhook 共存运行。
+数据库操作通过 SQLAlchemy 异步 ORM 完成（PostgreSQL）。
 """
 
 import os
@@ -22,9 +23,8 @@ from models import (
     get_or_create_user,
     collect_lantern,
     get_lanterns_by_city,
-    lanterns_col,
+    get_approved_lanterns,
 )
-from pymongo import DESCENDING
 
 logger = logging.getLogger(__name__)
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
@@ -73,13 +73,9 @@ async def handle_lanterns(request: web.Request) -> web.Response:
     limit = min(int(request.rel_url.query.get("limit", "100")), 200)
 
     if city:
-        lanterns = get_lanterns_by_city(city, limit=limit)
+        lanterns = await get_lanterns_by_city(city, limit=limit)
     else:
-        lanterns = list(
-            lanterns_col.find({"status": "approved"}, {"_id": 0})
-            .sort("submitted_at", DESCENDING)
-            .limit(limit)
-        )
+        lanterns = await get_approved_lanterns(limit=limit)
 
     # 为每个灯笼添加模糊坐标（真实坐标不存储，前端负责模糊化）
     city_coords = {
@@ -98,9 +94,9 @@ async def handle_lanterns(request: web.Request) -> web.Response:
         l["lat"] = lat
         l["lng"] = lng
         # 转换 datetime 为字符串
-        if "submitted_at" in l:
+        if "submitted_at" in l and l["submitted_at"] is not None:
             l["submitted_at"] = l["submitted_at"].isoformat()
-        if "updated_at" in l:
+        if "updated_at" in l and l["updated_at"] is not None:
             l["updated_at"] = l["updated_at"].isoformat()
 
     return web.Response(
@@ -124,7 +120,7 @@ async def handle_credit(request: web.Request) -> web.Response:
     except (KeyError, ValueError):
         raise web.HTTPBadRequest(reason="Missing or invalid user_id")
 
-    user = get_or_create_user(user_id)
+    user = await get_or_create_user(user_id)
     return web.json_response({"credit": user.get("credit_score", 0)})
 
 
@@ -148,7 +144,7 @@ async def handle_collect(request: web.Request) -> web.Response:
     if not user_id or not lantern_id:
         raise web.HTTPBadRequest(reason="Missing user_id or lantern_id")
 
-    collect_lantern(int(user_id), lantern_id)
+    await collect_lantern(int(user_id), lantern_id)
     return web.json_response({"ok": True, "message": "已收藏到你的时光秘匣 🕰"})
 
 
