@@ -1,9 +1,11 @@
 import os
 import asyncio
+import logging
 from fastapi import FastAPI
 from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.exceptions import TelegramConflictError
 
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
@@ -19,6 +21,8 @@ from schema import init_db
 from bot import register_all
 from web.routes import setup_routes
 
+logger = logging.getLogger(__name__)
+
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 register_all(dp)
@@ -27,11 +31,25 @@ app = FastAPI(title="CheBot Admin")
 templates = Jinja2Templates(directory="templates")
 setup_routes(app, bot, templates)
 
+ENABLE_BOT_POLLING = os.getenv("ENABLE_BOT_POLLING", "true").lower() in {"1", "true", "yes", "on"}
+
+
+async def run_bot_polling():
+    try:
+        await dp.start_polling(bot)
+    except TelegramConflictError:
+        logger.error(
+            "Telegram polling conflict detected; disable polling on duplicate instances with ENABLE_BOT_POLLING=false."
+        )
+
 
 @app.on_event("startup")
 async def startup():
     init_db()
-    asyncio.create_task(dp.start_polling(bot))
+    if ENABLE_BOT_POLLING:
+        asyncio.create_task(run_bot_polling())
+    else:
+        logger.info("Bot polling is disabled by ENABLE_BOT_POLLING=false")
 
 
 if __name__ == "__main__":
