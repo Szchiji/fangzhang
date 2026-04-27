@@ -26,6 +26,7 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     CallbackQuery,
+    ChatMemberUpdated,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
@@ -64,6 +65,9 @@ from models import (
     get_lantern_by_id,
     get_lantern_by_prefix,
     update_lantern_fields,
+    get_or_create_group_settings,
+    get_group_settings,
+    update_group_settings,
 )
 from ai import match_lanterns, analyze_authenticity, score_session_quality, check_anti_fraud
 from credit import (
@@ -180,6 +184,25 @@ def anon_chat_action_keyboard(chat_id: str) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="🎭 申请互揭真身", callback_data=f"anon:reveal:{chat_id}")],
             [InlineKeyboardButton(text="🚪 结束会话", callback_data=f"anon:end:{chat_id}")],
+        ]
+    )
+
+
+def _setup_keyboard(settings: dict) -> InlineKeyboardMarkup:
+    """群组 /setup 配置面板的 Inline Keyboard。"""
+    anti_fraud = settings.get("anti_fraud_enabled", True)
+    welcome = settings.get("welcome_enabled", True)
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(
+                text=f"{'✅' if anti_fraud else '❌'} 防骗检测",
+                callback_data="setup:toggle:anti_fraud",
+            )],
+            [InlineKeyboardButton(
+                text=f"{'✅' if welcome else '❌'} 进群欢迎语",
+                callback_data="setup:toggle:welcome",
+            )],
+            [InlineKeyboardButton(text="✔️ 完成配置", callback_data="setup:done")],
         ]
     )
 
@@ -343,7 +366,8 @@ async def cmd_help(message: Message):
         "/menu — 随时呼出主菜单\n"
         "/credit — 查看兰花令信用分\n"
         "/help — 显示此帮助信息\n"
-        "/cancel — 取消当前进行中的操作\n\n"
+        "/cancel — 取消当前进行中的操作\n"
+        "/setup — 群管配置（仅限群管理员在群内使用）\n\n"
         "<b>🔮 功能介绍</b>\n"
         "🗺 <b>进入秘境</b> — 在地图上浏览灯笼资源\n"
         "🔮 <b>媒婆匹配</b> — 用自然语言描述需求，AI 智能推荐\n"
@@ -1358,11 +1382,128 @@ async def cb_admin_reject(callback: CallbackQuery):
 
 
 # ---------------------------------------------------------------------------
+# 群管守护：机器人被邀请加入新群组
+# ---------------------------------------------------------------------------
+
+@router.my_chat_member()
+async def on_bot_chat_member_update(event: ChatMemberUpdated):
+    """当机器人被邀请加入新群组时，发送「致群主」欢迎语并初始化群组设置。"""
+    old_status = event.old_chat_member.status
+    new_status = event.new_chat_member.status
+
+    # 判断是否为首次加入（之前不是成员，现在是）
+    not_member_statuses = {"left", "kicked"}
+    was_not_member = old_status in not_member_statuses
+    is_now_member = new_status not in not_member_statuses
+
+    if was_not_member and is_now_member and event.chat.type in ("group", "supergroup"):
+        await get_or_create_group_settings(event.chat.id, event.chat.title or "")
+        await bot.send_message(
+            chat_id=event.chat.id,
+            text=(
+                "🌙 <b>致尊敬的群主及管理员：</b>\n\n"
+                "感谢将 <b>月影车姬守护</b> 加入本群！\n\n"
+                "🛡 <b>我能为群组提供：</b>\n"
+                "• <b>高危词汇监控</b> — 实时识别转账、定金等诈骗关键词，第一时间提醒群友\n"
+                "• <b>进群欢迎语</b> — 每位新成员进群时，自动发送防骗提示，守护群友安全\n"
+                "• <b>AI 图片鉴真（即将开放）</b> — 自动识别群内可疑虚假图片，对网图/AI 生成图即时预警\n\n"
+                "⚙️ <b>快速配置：</b>\n"
+                "群管理员发送 /setup 即可开启或关闭各项功能。\n\n"
+                "<i>月下寻花，影中见真 — 月影守护与你同在 🌙</i>"
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# /setup 指令（群管理员专属配置面板）
+# ---------------------------------------------------------------------------
+
+@router.message(Command("setup"))
+async def cmd_setup(message: Message):
+    """群管理员配置指令，只能在群组内使用。"""
+    if message.chat.type not in ("group", "supergroup"):
+        await message.answer("⚙️ /setup 指令只能在群组内使用。")
+        return
+
+    try:
+        member = await bot.get_chat_member(
+            chat_id=message.chat.id, user_id=message.from_user.id
+        )
+    except Exception:
+        await message.answer("⚠️ 无法验证管理员权限，请确认机器人拥有相应权限。")
+        return
+
+    if member.status not in ("administrator", "creator"):
+        await message.answer("⚙️ 只有群管理员才能使用 /setup 指令。")
+        return
+
+    settings = await get_or_create_group_settings(
+        message.chat.id, message.chat.title or ""
+    )
+    await message.answer(
+        "⚙️ <b>月影守护 — 群组配置面板</b>\n\n"
+        "点击按钮开启或关闭对应功能：",
+        reply_markup=_setup_keyboard(settings),
+    )
+
+
+@router.callback_query(F.data.startswith("setup:toggle:"))
+async def cb_setup_toggle(callback: CallbackQuery):
+    """切换群组功能开关。"""
+    try:
+        member = await bot.get_chat_member(
+            chat_id=callback.message.chat.id, user_id=callback.from_user.id
+        )
+    except Exception:
+        await callback.answer("无法验证权限", show_alert=True)
+        return
+
+    if member.status not in ("administrator", "creator"):
+        await callback.answer("只有群管理员才能修改设置", show_alert=True)
+        return
+
+    feature = callback.data.split(":", 2)[2]  # "anti_fraud" or "welcome"
+    field_map = {
+        "anti_fraud": "anti_fraud_enabled",
+        "welcome": "welcome_enabled",
+    }
+    field = field_map.get(feature)
+    if not field:
+        await callback.answer("未知选项", show_alert=True)
+        return
+
+    settings = await get_or_create_group_settings(
+        callback.message.chat.id, callback.message.chat.title or ""
+    )
+    new_val = not settings.get(field, True)
+    await update_group_settings(callback.message.chat.id, {field: new_val})
+
+    settings[field] = new_val
+    await callback.message.edit_reply_markup(reply_markup=_setup_keyboard(settings))
+    await callback.answer("✅ 已开启" if new_val else "❌ 已关闭")
+
+
+@router.callback_query(F.data == "setup:done")
+async def cb_setup_done(callback: CallbackQuery):
+    """完成配置，收起键盘并确认。"""
+    await callback.answer()
+    await callback.message.edit_text(
+        "⚙️ <b>月影守护配置已保存。</b>\n\n"
+        "发送 /setup 可随时重新调整。"
+    )
+
+
+# ---------------------------------------------------------------------------
 # 群管守护：新成员提醒 + 反诈检测
 # ---------------------------------------------------------------------------
 
 @router.message(F.new_chat_members)
 async def on_new_member(message: Message):
+    # 检查本群是否开启进群欢迎语
+    settings = await get_group_settings(message.chat.id)
+    if settings and not settings.get("welcome_enabled", True):
+        return
+
     names = ", ".join(m.full_name for m in message.new_chat_members)
     await message.answer(
         f"🌙 欢迎 {names} 加入月影秘境！\n\n"
@@ -1371,11 +1512,37 @@ async def on_new_member(message: Message):
     )
 
 
+@router.message(F.photo & F.chat.type.in_({"group", "supergroup"}))
+async def group_photo_anti_fraud_monitor(message: Message):
+    """
+    群组图片防骗监控框架（预留接入点）。
+
+    TODO: 接入现有的 AI 鉴真模块（ai.py 中的 analyze_authenticity）进行自动打假：
+      1. 获取最高分辨率图片的 file_id：file_id = message.photo[-1].file_id
+      2. 下载图片：file = await bot.get_file(file_id); image_bytes = await bot.download(file)
+      3. 调用鉴真：result = await analyze_authenticity(image_bytes)
+      4. 若 result.get("authenticity_score", 100) < 50 或存在 "ai_generated"/"stolen" 标签，
+         则通过 message.reply() 发送 AI 鉴真警告，格式参考 group_anti_fraud_monitor。
+    """
+    settings = await get_group_settings(message.chat.id)
+    if settings and not settings.get("anti_fraud_enabled", True):
+        return
+
+    # [预留接入点] AI 鉴真逻辑将在此处实现，当前仅占位
+    pass
+
+
 @router.message(F.text & F.chat.type.in_({"group", "supergroup"}))
 async def group_anti_fraud_monitor(message: Message):
     """群组消息反诈监控：检测高危关键词并提醒。"""
     if not message.text:
         return
+
+    # 检查本群是否开启防骗检测
+    settings = await get_group_settings(message.chat.id)
+    if settings and not settings.get("anti_fraud_enabled", True):
+        return
+
     triggered = check_anti_fraud(message.text)
     if triggered:
         kws = "、".join(triggered)
