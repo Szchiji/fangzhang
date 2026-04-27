@@ -8,6 +8,10 @@
   <!-- Leaflet.js 地图 -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet.markercluster 聚合聚类 -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
@@ -129,6 +133,21 @@
       background: var(--surface);
       flex-shrink: 0;
     }
+
+    /* ── 聚合聚类气泡 ── */
+    .cluster-icon-inner {
+      background: rgba(240,192,64,0.85);
+      color: #0d0d1a;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 14px;
+      box-shadow: 0 0 8px rgba(240,192,64,0.6);
+    }
   </style>
 </head>
 <body>
@@ -236,11 +255,21 @@ function makeLanternIcon(authenticity) {
 // 灯笼数据管理
 // ────────────────────────────────────────────
 let allLanterns = [];
-let markers = [];
+let clusterGroup = L.markerClusterGroup({
+  maxClusterRadius: 60,
+  iconCreateFunction: (cluster) => {
+    const count = cluster.getChildCount();
+    return L.divIcon({
+      html: `<div class="cluster-icon-inner">${count}</div>`,
+      className: '',
+      iconSize: [36, 36],
+    });
+  },
+});
+map.addLayer(clusterGroup);
 
 function clearMarkers() {
-  markers.forEach(m => map.removeLayer(m));
-  markers = [];
+  clusterGroup.clearLayers();
 }
 
 function renderLanterns(lanterns) {
@@ -266,8 +295,7 @@ function renderLanterns(lanterns) {
     `);
 
     const marker = L.marker([lat, lng], { icon }).bindPopup(popup);
-    marker.addTo(map);
-    markers.push(marker);
+    clusterGroup.addLayer(marker);
   });
 
   document.getElementById('status-bar').textContent =
