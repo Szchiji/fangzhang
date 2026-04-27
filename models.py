@@ -172,6 +172,22 @@ class Metric(Base):
 
 
 # =============================================================================
+# 群组设置表
+# =============================================================================
+class GroupSettings(Base):
+    """群组（群主/管理员）配置，存储每个群组的功能开关。"""
+    __tablename__ = "group_settings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    group_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    group_name = Column(String(255), default="")
+    anti_fraud_enabled = Column(Boolean, default=True)   # 防骗检测开关
+    welcome_enabled = Column(Boolean, default=True)      # 进群欢迎语开关
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+# =============================================================================
 # 建表（首次启动调用）
 # =============================================================================
 async def create_tables():
@@ -954,6 +970,77 @@ async def decline_chat_request(request_id: str):
         if req:
             req.status = "declined"
             req.declined_at = datetime.utcnow()
+            await session.commit()
+
+
+def _group_settings_to_dict(gs: GroupSettings) -> dict:
+    """将 GroupSettings ORM 对象转为字典。"""
+    return {
+        "group_id": gs.group_id,
+        "group_name": gs.group_name or "",
+        "anti_fraud_enabled": bool(gs.anti_fraud_enabled),
+        "welcome_enabled": bool(gs.welcome_enabled),
+        "created_at": gs.created_at,
+        "updated_at": gs.updated_at,
+    }
+
+
+# =============================================================================
+# 群组设置模型（异步）
+# =============================================================================
+
+async def get_or_create_group_settings(group_id: int, group_name: str = "") -> dict:
+    """
+    获取群组设置，若不存在则以默认值新建。
+    默认开启防骗检测与进群欢迎语。
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(GroupSettings).where(GroupSettings.group_id == group_id)
+        )
+        gs = result.scalar_one_or_none()
+        if gs is None:
+            gs = GroupSettings(
+                group_id=group_id,
+                group_name=group_name,
+                anti_fraud_enabled=True,
+                welcome_enabled=True,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+            session.add(gs)
+            await session.commit()
+            await session.refresh(gs)
+        else:
+            if group_name and gs.group_name != group_name:
+                gs.group_name = group_name
+                gs.updated_at = datetime.utcnow()
+                await session.commit()
+        return _group_settings_to_dict(gs)
+
+
+async def get_group_settings(group_id: int) -> Optional[dict]:
+    """获取群组设置，不存在返回 None。"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(GroupSettings).where(GroupSettings.group_id == group_id)
+        )
+        gs = result.scalar_one_or_none()
+        return _group_settings_to_dict(gs) if gs else None
+
+
+async def update_group_settings(group_id: int, fields: dict):
+    """更新群组设置的任意字段。"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(GroupSettings).where(GroupSettings.group_id == group_id)
+        )
+        gs = result.scalar_one_or_none()
+        if gs:
+            for key, value in fields.items():
+                if hasattr(gs, key):
+                    setattr(gs, key, value)
+            gs.updated_at = datetime.utcnow()
             await session.commit()
 
 
