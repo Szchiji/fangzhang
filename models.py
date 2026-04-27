@@ -634,6 +634,21 @@ async def get_lanterns_multi_filter(
         return [_lantern_to_dict(l) for l in result.scalars().all()]
 
 
+async def get_lantern_by_prefix(lantern_id_prefix: str) -> Optional[dict]:
+    """
+    根据 lantern_id 前缀搜索灯笼（兼容用户输入的短ID，大小写不敏感）。
+    匹配第一个以该前缀开头的灯笼，不存在返回 None。
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Lantern).where(
+                Lantern.lantern_id.ilike(f"{lantern_id_prefix}%")
+            )
+        )
+        lantern = result.scalars().first()
+        return _lantern_to_dict(lantern) if lantern else None
+
+
 async def get_high_trust_lanterns(limit: int = 30) -> list:
     """冷启动兜底：返回全局高可信灯笼（真实度 ≥ 70）。"""
     async with AsyncSessionLocal() as session:

@@ -62,6 +62,7 @@ from models import (
     accept_chat_request,
     decline_chat_request,
     get_lantern_by_id,
+    get_lantern_by_prefix,
     update_lantern_fields,
 )
 from ai import match_lanterns, analyze_authenticity, score_session_quality, check_anti_fraud
@@ -127,6 +128,11 @@ class AnonChat(StatesGroup):
     rating = State()       # 等待用户提交评分
 
 
+class ReportLantern(StatesGroup):
+    waiting_lantern_id = State()   # 等待用户输入灯笼ID
+    waiting_reason = State()       # 等待用户输入举报原因
+
+
 # ---------------------------------------------------------------------------
 # 工具函数
 # ---------------------------------------------------------------------------
@@ -143,7 +149,17 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🏮 投稿灯笼", callback_data="cmd:submit")],
             [InlineKeyboardButton(text="🌸 兰花令牌", callback_data="cmd:credit")],
             [InlineKeyboardButton(text="🕰 时光秘匣", callback_data="cmd:collection")],
+            [InlineKeyboardButton(text="🚨 举报灯笼", callback_data="cmd:report")],
             [InlineKeyboardButton(text="🛡 车姬守护", callback_data="cmd:guard")],
+        ]
+    )
+
+
+def cancel_keyboard() -> InlineKeyboardMarkup:
+    """FSM 流程中通用的取消操作按钮。"""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ 取消操作", callback_data="cancel:fsm")],
         ]
     )
 
@@ -301,12 +317,123 @@ async def cmd_start(message: Message):
     recovery_note = f"\n🌱 今日恢复 <b>+{recovered}</b> 兰花令" if recovered else ""
 
     badge = format_tier_badge(credit)
+    is_new = not user.get("credit_history")
+    new_user_hint = "\n\n💡 <i>初次使用？发送 /help 查看完整功能指南。</i>" if is_new else ""
     await message.answer(
         "🌙 <b>月影车姬欢迎你，老司机！</b> 🌙\n\n"
         "在月下秘境中，每一盏灯笼都藏着真实的邂逅。\n"
         "让月影媒婆为你牵线，兰花会守护你的信任。\n\n"
-        f"✨ 兰花令：{badge}{recovery_note}\n\n"
+        f"✨ 兰花令：{badge}{recovery_note}"
+        f"{new_user_hint}\n\n"
         "<i>月下寻花，影中见真</i> — 选择你的探索之路：",
+        reply_markup=main_menu_keyboard(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# /help 命令
+# ---------------------------------------------------------------------------
+
+@router.message(Command("help"))
+async def cmd_help(message: Message):
+    await message.answer(
+        "🌙 <b>月影车姬机器人 — 使用指南</b>\n\n"
+        "<b>📋 基本命令</b>\n"
+        "/start — 开启月影之旅，显示主菜单\n"
+        "/menu — 随时呼出主菜单\n"
+        "/credit — 查看兰花令信用分\n"
+        "/help — 显示此帮助信息\n"
+        "/cancel — 取消当前进行中的操作\n\n"
+        "<b>🔮 功能介绍</b>\n"
+        "🗺 <b>进入秘境</b> — 在地图上浏览灯笼资源\n"
+        "🔮 <b>媒婆匹配</b> — 用自然语言描述需求，AI 智能推荐\n"
+        "🏮 <b>投稿灯笼</b> — 分享真实资源，经审核后上架\n"
+        "🌸 <b>兰花令牌</b> — 查看信用分、等级权益和修行任务\n"
+        "🕰 <b>时光秘匣</b> — 查看你收藏的灯笼\n"
+        "🚨 <b>举报灯笼</b> — 举报虚假或诈骗资源，守护秘境\n"
+        "🛡 <b>车姬守护</b> — 将机器人加入群组，自动反诈守护\n\n"
+        "<b>💡 使用小技巧</b>\n"
+        "• 媒婆匹配直接描述需求，如「台北大学生 6000 左右」\n"
+        "• 信用分越高，媒婆匹配优先级越高\n"
+        "• 完成修行任务可恢复被扣减的兰花令\n"
+        "• 操作中随时可发送 /cancel 取消\n"
+        "• 遇到诈骗务必举报，保护大家安全！",
+        reply_markup=main_menu_keyboard(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# /cancel 命令
+# ---------------------------------------------------------------------------
+
+@router.message(Command("cancel"))
+async def cmd_cancel(message: Message, state: FSMContext):
+    current = await state.get_state()
+    if current:
+        await state.clear()
+        await message.answer(
+            "✅ 已取消当前操作，返回主菜单。",
+            reply_markup=main_menu_keyboard(),
+        )
+    else:
+        await message.answer(
+            "🌙 当前没有进行中的操作。",
+            reply_markup=main_menu_keyboard(),
+        )
+
+
+# ---------------------------------------------------------------------------
+# /menu 命令
+# ---------------------------------------------------------------------------
+
+@router.message(Command("menu"))
+async def cmd_menu(message: Message):
+    await message.answer(
+        "🌙 <b>月影车姬主菜单</b>\n\n选择你的探索之路：",
+        reply_markup=main_menu_keyboard(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# /credit 命令（文字命令版）
+# ---------------------------------------------------------------------------
+
+@router.message(Command("credit"))
+async def cmd_credit_command(message: Message):
+    user_id = message.from_user.id
+    recovered = await try_daily_recovery(user_id)
+    user = await get_or_create_user(user_id)
+    report = format_credit_report(user)
+    recovery_note = f"\n🌱 今日恢复 <b>+{recovered}</b> 兰花令" if recovered else ""
+    await message.answer(
+        report + recovery_note,
+        reply_markup=main_menu_keyboard(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# cancel:fsm 回调（取消 FSM 中的操作）
+# ---------------------------------------------------------------------------
+
+@router.callback_query(F.data == "cancel:fsm")
+async def cb_cancel_fsm(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await state.clear()
+    await callback.message.answer(
+        "✅ 已取消操作，返回主菜单。",
+        reply_markup=main_menu_keyboard(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# menu:back 回调（返回主菜单）
+# ---------------------------------------------------------------------------
+
+@router.callback_query(F.data == "menu:back")
+async def cb_menu_back(callback: CallbackQuery):
+    await callback.answer()
+    await callback.message.answer(
+        "🌙 <b>月影车姬主菜单</b>\n\n选择你的探索之路：",
         reply_markup=main_menu_keyboard(),
     )
 
@@ -336,8 +463,10 @@ async def cb_match(callback: CallbackQuery, state: FSMContext):
         "🔮 <b>月影媒婆已燃起红烛，恭候老司机驾临。</b>\n\n"
         "请用自然语言描述你的心仪之选，例如：\n"
         "<i>「台北 大学生 KH 6000左右，需要真实照」</i>\n\n"
-        "媒婆将为你在月影秘境中寻访最合适的灯笼 ✨"
-        + hint
+        "媒婆将为你在月影秘境中寻访最合适的灯笼 ✨\n\n"
+        "💡 发送 /cancel 或点击下方按钮可随时取消。"
+        + hint,
+        reply_markup=cancel_keyboard(),
     )
     await state.set_state(MatchQuery.waiting_query)
 
@@ -462,7 +591,9 @@ async def cb_submit(callback: CallbackQuery, state: FSMContext):
 
     await callback.message.answer(
         "🏮 <b>投稿灯笼资源</b>\n\n"
-        "第 1 步：请输入资源所在的<b>城市</b>（如：台北、香港、深圳）"
+        "第 1 步：请输入资源所在的<b>城市</b>（如：台北、香港、深圳）\n\n"
+        "💡 发送 /cancel 或点击下方按钮可随时取消投稿。",
+        reply_markup=cancel_keyboard(),
     )
     await state.set_state(SubmitLantern.city)
 
@@ -470,21 +601,30 @@ async def cb_submit(callback: CallbackQuery, state: FSMContext):
 @router.message(SubmitLantern.city)
 async def submit_city(message: Message, state: FSMContext):
     await state.update_data(city=message.text.strip())
-    await message.answer("第 2 步：请输入资源<b>类型</b>（如：大学生、KH、兼职、全职）")
+    await message.answer(
+        "第 2 步：请输入资源<b>类型</b>（如：大学生、KH、兼职、全职）",
+        reply_markup=cancel_keyboard(),
+    )
     await state.set_state(SubmitLantern.resource_type)
 
 
 @router.message(SubmitLantern.resource_type)
 async def submit_type(message: Message, state: FSMContext):
     await state.update_data(resource_type=message.text.strip())
-    await message.answer("第 3 步：请输入<b>价位范围</b>（如：5000-8000）")
+    await message.answer(
+        "第 3 步：请输入<b>价位范围</b>（如：5000-8000）",
+        reply_markup=cancel_keyboard(),
+    )
     await state.set_state(SubmitLantern.price_range)
 
 
 @router.message(SubmitLantern.price_range)
 async def submit_price(message: Message, state: FSMContext):
     await state.update_data(price_range=message.text.strip())
-    await message.answer("第 4 步：请输入<b>详细描述</b>（外貌、服务、注意事项等，不超过 500 字）")
+    await message.answer(
+        "第 4 步：请输入<b>详细描述</b>（外貌、服务、注意事项等，不超过 500 字）",
+        reply_markup=cancel_keyboard(),
+    )
     await state.set_state(SubmitLantern.description)
 
 
@@ -493,7 +633,9 @@ async def submit_description(message: Message, state: FSMContext):
     await state.update_data(description=message.text.strip()[:500])
     await message.answer(
         "第 5 步：请发送<b>真实照片</b>（可发多张，发完后请回复「完成」）\n\n"
-        "⚠️ 照片将经过 AI 兰花鉴真分析，确保真实度。"
+        "⚠️ 照片将经过 AI 兰花鉴真分析，确保真实度。\n"
+        "💡 点击下方按钮可随时取消投稿。",
+        reply_markup=cancel_keyboard(),
     )
     await state.update_data(photo_file_ids=[])
     await state.set_state(SubmitLantern.photos)
@@ -612,13 +754,33 @@ async def cb_collection(callback: CallbackQuery):
         )
         return
 
-    text = f"🕰 <b>你的时光秘匣（{len(collected)} 盏灯笼）</b>\n\n"
-    for lid in collected[:10]:
-        text += f"• <code>{lid[:8]}…</code>\n"
-    if len(collected) > 10:
-        text += f"\n…及其他 {len(collected) - 10} 盏"
+    text = f"🕰 <b>你的时光秘匣（共 {len(collected)} 盏灯笼）</b>\n\n"
+    display_ids = collected[:10]
+    rows = []
+    for i, lid in enumerate(display_ids, 1):
+        lantern = await get_lantern_by_id(lid)
+        if lantern:
+            auth_val = lantern.get("authenticity_score")
+            auth_str = f" | 真实度 {auth_val:.0f}%" if auth_val is not None else ""
+            text += (
+                f"{i}. 🌙 <b>{lantern.get('city', '?')} · {lantern.get('type', '?')}</b>\n"
+                f"   💰 {lantern.get('price_range', '?')}{auth_str}\n"
+                f"   <code>{lid[:8]}…</code>\n\n"
+            )
+            rows.append([
+                InlineKeyboardButton(
+                    text=f"💌 向#{i}申请会话", callback_data=f"anon:req:{lid}"
+                ),
+            ])
+        else:
+            text += f"{i}. <code>{lid[:8]}…</code>（灯笼已失效）\n\n"
 
-    await callback.message.answer(text, reply_markup=main_menu_keyboard())
+    if len(collected) > 10:
+        text += f"…及其他 {len(collected) - 10} 盏\n"
+
+    rows.append([InlineKeyboardButton(text="🔙 返回主菜单", callback_data="menu:back")])
+    kb = InlineKeyboardMarkup(inline_keyboard=rows)
+    await callback.message.answer(text, reply_markup=kb)
 
 
 # ---------------------------------------------------------------------------
@@ -635,6 +797,88 @@ async def cb_guard(callback: CallbackQuery):
         "• 识别骗子关键词并提醒新人\n"
         "• 新人进群提示「先查信用分」\n\n"
         "在群组内发送 /guard_on 开启，/guard_off 关闭。",
+        reply_markup=main_menu_keyboard(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# 举报灯笼流程
+# ---------------------------------------------------------------------------
+
+@router.callback_query(F.data == "cmd:report")
+async def cb_report(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    if await _check_rate_limit(callback.from_user.id, "report", callback):
+        return
+
+    await callback.message.answer(
+        "🚨 <b>举报灯笼资源</b>\n\n"
+        "请输入要举报的灯笼编号（ID 前 8 位即可），\n"
+        "例如：<code>a1b2c3d4</code>\n\n"
+        "💡 灯笼ID 可在媒婆匹配结果或时光秘匣中找到。\n"
+        "点击下方按钮可取消举报。",
+        reply_markup=cancel_keyboard(),
+    )
+    await state.set_state(ReportLantern.waiting_lantern_id)
+
+
+@router.message(ReportLantern.waiting_lantern_id)
+async def report_enter_lantern_id(message: Message, state: FSMContext):
+    lid_hint = message.text.strip() if message.text else ""
+    if len(lid_hint) < 4:
+        await message.answer(
+            "请输入至少 4 位灯笼ID（如：<code>a1b2c3d4</code>）。",
+            reply_markup=cancel_keyboard(),
+        )
+        return
+
+    # 根据前缀查找灯笼
+    lantern = await get_lantern_by_prefix(lid_hint)
+    if not lantern:
+        await message.answer(
+            f"🔍 未找到 ID 以 <code>{lid_hint}</code> 开头的灯笼。\n\n"
+            "请检查 ID 是否正确，或直接输入更多字符后重试。",
+            reply_markup=cancel_keyboard(),
+        )
+        return
+
+    full_id = lantern["lantern_id"]
+    await state.update_data(lantern_id=full_id)
+    await message.answer(
+        f"📋 <b>确认举报灯笼</b>\n\n"
+        f"城市：{lantern.get('city', '?')} · 类型：{lantern.get('type', '?')}\n"
+        f"价位：{lantern.get('price_range', '?')}\n"
+        f"ID：<code>{full_id[:8]}…</code>\n\n"
+        "请简要描述举报原因（如：虚假照片、诈骗、盗图等）：",
+        reply_markup=cancel_keyboard(),
+    )
+    await state.set_state(ReportLantern.waiting_reason)
+
+
+@router.message(ReportLantern.waiting_reason)
+async def report_enter_reason(message: Message, state: FSMContext):
+    reason = message.text.strip()[:200] if message.text else ""
+    if not reason:
+        await message.answer("请输入有效的举报原因。", reply_markup=cancel_keyboard())
+        return
+
+    data = await state.get_data()
+    await state.clear()
+
+    full_id = data.get("lantern_id", "")
+    await report_lantern(full_id, message.from_user.id, reason)
+    await log_behavior(message.from_user.id, "report", full_id, metadata={"reason": reason})
+    await log_metric("lantern_reported", {
+        "reporter": message.from_user.id,
+        "lantern": full_id,
+        "reason": reason,
+    })
+
+    await message.answer(
+        "✅ <b>举报已提交！</b>\n\n"
+        "感谢你的守护，管理员将尽快核实。\n"
+        "核实成立后你将获得兰花令奖励。\n\n"
+        "🌙 月影秘境因你而更安全。",
         reply_markup=main_menu_keyboard(),
     )
 
